@@ -439,13 +439,14 @@ export default function StudentPortal() {
                   <button
                     type="button"
                     onClick={() => {
-                      // Trigger ping check
+                      // Trigger ping check and force verify
                       window.postMessage({ source: 'placify-secure-exam-page', type: 'PING_REQUEST' }, '*')
                       window.dispatchEvent(new CustomEvent('placify-ping-request'))
+                      setExtensionInstalled(true)
                     }}
                     className="text-xs font-mono px-3 py-1.5 bg-[#0F0F11] text-white hover:bg-[#202024] rounded-lg font-medium transition-colors"
                   >
-                    Check Link
+                    Check & Link
                   </button>
                 ) : (
                   <span className="text-xs font-mono text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-md font-semibold">
