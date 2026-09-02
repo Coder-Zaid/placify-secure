@@ -125,6 +125,7 @@ export default function AssessmentAnalytics() {
           </div>
           <p className="text-sm text-[#6F6F75]">Monitoring student details (Name, Roll No, Email), answers updated in real-time, scores, and security logs.</p>
         </div>
+      </div>
 
       {/* Metrics Summary Rows */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
