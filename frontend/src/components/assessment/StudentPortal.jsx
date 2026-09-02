@@ -179,9 +179,19 @@ export default function StudentPortal() {
     }
   })
 
-  // Timer Countdown
+  // Timer Countdown & Extension HUD sync
   useEffect(() => {
     if (!examStarted || examCompleted || examTerminated || timeLeftSeconds <= 0) return
+
+    // Push HUD status to extension
+    window.postMessage({
+      source: 'placify-secure-exam-page',
+      type: 'UPDATE_HUD',
+      title: assessmentInfo?.title || 'Assessment in Progress',
+      timeLeft: timeLeftSeconds,
+      warningCount: warningCount,
+      maxWarnings: assessmentInfo?.security_policy?.max_warnings ?? 1
+    }, '*')
 
     const timer = setInterval(() => {
       setTimeLeftSeconds(prev => {
@@ -195,7 +205,7 @@ export default function StudentPortal() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [examStarted, examCompleted, examTerminated, timeLeftSeconds])
+  }, [examStarted, examCompleted, examTerminated, timeLeftSeconds, warningCount, assessmentInfo])
 
   const handleStartExam = async (e) => {
     e.preventDefault()
@@ -396,22 +406,34 @@ export default function StudentPortal() {
           <div className="space-y-4">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-[#0F0F11]">Pre-Exam System Readiness</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
-              <div className="flex items-center justify-between p-4 bg-[#FAFAF8] border border-[#0F0F11]/5 rounded-xl">
+              <div className="flex items-center justify-between p-4 bg-[#FAFAF8] border border-[#0F0F11]/5 rounded-xl col-span-1 md:col-span-2">
                 <div className="flex items-center gap-3">
-                  <Shield className={`w-4 h-4 ${extensionInstalled ? 'text-green-600' : 'text-amber-500'}`} />
+                  <div className={`w-3 h-3 rounded-full ${extensionInstalled ? 'bg-green-500 ring-4 ring-green-100' : 'bg-amber-500 animate-pulse'}`} />
                   <div>
-                    <div className="font-medium text-[#0F0F11]">Secure Extension</div>
-                    <div className="text-[10px] mt-0.5">{extensionInstalled ? 'Active & Running' : 'Required (or bypass for test)'}</div>
+                    <div className="font-medium text-[#0F0F11]">Placify Secure Extension</div>
+                    <div className="text-[11px] text-[#6F6F75] mt-0.5">
+                      {extensionInstalled 
+                        ? 'Extension linked & verified. You are ready to start.' 
+                        : 'Required: Sideload/link the companion extension in your browser to take this test.'}
+                    </div>
                   </div>
                 </div>
-                {!extensionInstalled && (
+                {!extensionInstalled ? (
                   <button
                     type="button"
-                    onClick={() => setExtensionInstalled(true)}
-                    className="text-[10px] font-mono px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded font-semibold transition-colors"
+                    onClick={() => {
+                      // Trigger ping check
+                      window.postMessage({ source: 'placify-secure-exam-page', type: 'PING_REQUEST' }, '*')
+                      window.dispatchEvent(new CustomEvent('placify-ping-request'))
+                    }}
+                    className="text-xs font-mono px-3 py-1.5 bg-[#0F0F11] text-white hover:bg-[#202024] rounded-lg font-medium transition-colors"
                   >
-                    Bypass / Verify
+                    Check Link
                   </button>
+                ) : (
+                  <span className="text-xs font-mono text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-md font-semibold">
+                    ✓ Linked
+                  </span>
                 )}
               </div>
 
