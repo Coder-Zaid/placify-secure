@@ -77,24 +77,23 @@ export default function AssessmentAnalytics() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-10 space-y-10 animate-fade-in pb-24">
-      
-      {/* Navigation & Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#0F0F11]/10 pb-6">
-        <div className="space-y-1">
-          <Link to="/assessments" className="flex items-center gap-1.5 text-xs font-mono text-[#6F6F75] hover:text-[#0F0F11] transition-colors">
-            <ChevronLeft className="w-3.5 h-3.5" />
-            Back to Control Center
-          </Link>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight text-[#0F0F11]">{analytics?.assessment_title || monitor?.assessment_title} Analytics</h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-green-50 text-green-700 border border-green-200">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              Live Tracking
-            </span>
+    <div className="max-w-7xl mx-auto px-6 py-8 space-y-10 animate-fade-in pb-24">
+      {/* Placify Navigation Header */}
+      <div className="flex items-center justify-between pb-6 border-b border-[#0F0F11]/10">
+        <Link to="/assessments" className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#0F0F11] text-white flex items-center justify-center font-bold text-lg tracking-wider shadow-sm">
+            P
           </div>
-          <p className="text-sm text-[#6F6F75]">Monitoring student details (Name, Roll No, Email), answers updated in real-time, scores, and security logs.</p>
-        </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-lg tracking-tight text-[#0F0F11]">PLACIFY</span>
+              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                SECURE
+              </span>
+            </div>
+            <p className="text-xs text-[#6F6F75]">Live Proctoring & Analytics Console</p>
+          </div>
+        </Link>
 
         <div className="flex items-center gap-3">
           <button
@@ -105,10 +104,27 @@ export default function AssessmentAnalytics() {
             Refresh Data
           </button>
           <div className="text-[11px] font-mono text-[#A8A8AE]">
-            Last updated: {lastRefreshed.toLocaleTimeString()}
+            {lastRefreshed.toLocaleTimeString()}
           </div>
         </div>
       </div>
+      
+      {/* Navigation & Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#0F0F11]/10 pb-6">
+        <div className="space-y-1">
+          <Link to="/assessments" className="flex items-center gap-1.5 text-xs font-mono text-[#6F6F75] hover:text-[#0F0F11] transition-colors mb-2">
+            <ChevronLeft className="w-3.5 h-3.5" />
+            Back to Assessments
+          </Link>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight text-[#0F0F11]">{analytics?.assessment_title || monitor?.assessment_title} Analytics</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-green-50 text-green-700 border border-green-200">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+              Live Tracking
+            </span>
+          </div>
+          <p className="text-sm text-[#6F6F75]">Monitoring student details (Name, Roll No, Email), answers updated in real-time, scores, and security logs.</p>
+        </div>
 
       {/* Metrics Summary Rows */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">

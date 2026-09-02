@@ -224,20 +224,44 @@ export default function AssessmentBuilder() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12 space-y-12">
-      <div className="flex justify-between items-center border-b border-[#0F0F11]/10 pb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-[#0F0F11]">
-            {isEdit ? 'Edit Assessment Campaign' : 'Create Assessment Campaign'}
-          </h1>
-          <p className="text-sm text-[#6F6F75] mt-1">Configure evaluation campaigns, questions, and custom browser integrity policies.</p>
+    <div className="max-w-7xl mx-auto px-6 py-8 space-y-10">
+      {/* Placify Navigation Header */}
+      <div className="flex items-center justify-between pb-6 border-b border-[#0F0F11]/10">
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/assessments')}>
+          <div className="w-10 h-10 rounded-xl bg-[#0F0F11] text-white flex items-center justify-center font-bold text-lg tracking-wider shadow-sm">
+            P
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-lg tracking-tight text-[#0F0F11]">PLACIFY</span>
+              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                SECURE
+              </span>
+            </div>
+            <p className="text-xs text-[#6F6F75]">Assessment Authoring Studio</p>
+          </div>
         </div>
-        <button onClick={handleSave} className="btn-primary flex items-center gap-2">
-          <Save className="w-4 h-4" />
-          Save Assessment
-        </button>
+
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/assessments')} className="btn-secondary">
+            Cancel
+          </button>
+          <button onClick={handleSave} className="btn-primary flex items-center gap-2">
+            <Save className="w-4 h-4" />
+            {isEdit ? 'Save Changes' : 'Create Assessment'}
+          </button>
+        </div>
       </div>
 
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#0F0F11]">
+            {isEdit ? 'Configure Assessment' : 'New Assessment Campaign'}
+          </h1>
+          <p className="text-sm text-[#6F6F75] mt-1">Configure proctoring integrity parameters, questions, and duration.</p>
+        </div>
+      </div>
+      
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Side: Parameters & Security */}
         <div className="lg:col-span-4 space-y-8">

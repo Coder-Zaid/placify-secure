@@ -386,7 +386,21 @@ export default function StudentPortal() {
   // 3. System Pre-check and Registration Screen
   if (!examStarted) {
     return (
-      <div className="max-w-2xl mx-auto py-12 space-y-8">
+      <div className="max-w-2xl mx-auto py-12 space-y-6">
+        <div className="flex items-center justify-between px-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#0F0F11] text-white flex items-center justify-center font-bold text-sm tracking-wider shadow-sm">
+              P
+            </div>
+            <div className="font-extrabold text-base tracking-tight text-[#0F0F11]">
+              PLACIFY <span className="text-xs font-mono font-medium text-indigo-600 ml-1">SECURE</span>
+            </div>
+          </div>
+          <div className="text-xs font-mono text-[#6F6F75] bg-[#FAFAF8] px-3 py-1 rounded-full border border-[#0F0F11]/5">
+            Code: {accessCode}
+          </div>
+        </div>
+
         <div className="q-card space-y-6">
           <div>
             <h1 className="text-2xl font-bold text-[#0F0F11]">{assessmentInfo.title}</h1>
