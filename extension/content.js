@@ -1,13 +1,20 @@
 // Content Script running inside Placify Exam page
 let examPageActive = false;
 
-// Expose immediate indicator in DOM
+// Expose immediate indicator in DOM & Window
 try {
   document.documentElement.setAttribute('data-placify-extension-installed', 'true');
+  const script = document.createElement('script');
+  script.textContent = `window.__PLACIFY_EXTENSION_INSTALLED__ = true; window.dispatchEvent(new CustomEvent('placify-extension-ready'));`;
+  (document.head || document.documentElement).appendChild(script);
+  script.remove();
 } catch (e) {}
 
 // Also respond via CustomEvent as well as postMessage
 window.addEventListener('placify-ping-request', () => {
+  try {
+    document.documentElement.setAttribute('data-placify-extension-installed', 'true');
+  } catch (e) {}
   window.dispatchEvent(new CustomEvent('placify-ping-response', { detail: { version: '1.0.0' } }));
 });
 

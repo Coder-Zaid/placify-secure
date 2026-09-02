@@ -96,18 +96,21 @@ export default function StudentPortal() {
 
   // Monitor extension existence check
   useEffect(() => {
-    let pingReceivedCount = 0
-
     const markInstalled = () => {
-      pingReceivedCount++
       setExtensionInstalled(true)
     }
 
-    // Check if DOM attribute was already injected
-    if (document.documentElement.getAttribute('data-placify-extension-installed') === 'true') {
-      markInstalled()
+    const checkNow = () => {
+      if (
+        window.__PLACIFY_EXTENSION_INSTALLED__ === true ||
+        document.documentElement.getAttribute('data-placify-extension-installed') === 'true'
+      ) {
+        markInstalled()
+      }
     }
-    
+
+    checkNow()
+
     const handlePingResponse = (e) => {
       if (e.data && e.data.source === 'placify-secure-extension' && e.data.type === 'PING_RESPONSE') {
         markInstalled()
@@ -120,22 +123,22 @@ export default function StudentPortal() {
 
     window.addEventListener('message', handlePingResponse)
     window.addEventListener('placify-ping-response', handleCustomPing)
+    window.addEventListener('placify-extension-ready', handleCustomPing)
     
     // Ping extension
     const sendPing = () => {
+      checkNow()
       window.postMessage({ source: 'placify-secure-exam-page', type: 'PING_REQUEST' }, '*')
       window.dispatchEvent(new CustomEvent('placify-ping-request'))
-      if (document.documentElement.getAttribute('data-placify-extension-installed') === 'true') {
-        markInstalled()
-      }
     }
 
     sendPing()
-    const interval = setInterval(sendPing, 1000)
+    const interval = setInterval(sendPing, 800)
 
     return () => {
       window.removeEventListener('message', handlePingResponse)
       window.removeEventListener('placify-ping-response', handleCustomPing)
+      window.removeEventListener('placify-extension-ready', handleCustomPing)
       clearInterval(interval)
     }
   }, [])
