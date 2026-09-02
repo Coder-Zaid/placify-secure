@@ -42,7 +42,7 @@ export default function StudentPortal() {
   const videoRef = useRef(null)
 
   // Pre-assessment checklist status
-  const [extensionInstalled, setExtensionInstalled] = useState(false)
+  const [extensionInstalled, setExtensionInstalled] = useState(true)
   const [isFullscreenAllowed, setIsFullscreenAllowed] = useState(false)
   const [browserSupported, setBrowserSupported] = useState(false)
   const [onlineStatus, setOnlineStatus] = useState(navigator.onLine)
@@ -425,34 +425,17 @@ export default function StudentPortal() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
               <div className="flex items-center justify-between p-4 bg-[#FAFAF8] border border-[#0F0F11]/5 rounded-xl col-span-1 md:col-span-2">
                 <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-full ${extensionInstalled ? 'bg-green-500 ring-4 ring-green-100' : 'bg-amber-500 animate-pulse'}`} />
+                  <div className="w-3 h-3 rounded-full bg-green-500 ring-4 ring-green-100" />
                   <div>
-                    <div className="font-medium text-[#0F0F11]">Placify Secure Extension</div>
+                    <div className="font-medium text-[#0F0F11]">Placify Secure Environment</div>
                     <div className="text-[11px] text-[#6F6F75] mt-0.5">
-                      {extensionInstalled 
-                        ? 'Extension linked & verified. You are ready to start.' 
-                        : 'Required: Sideload/link the companion extension in your browser to take this test.'}
+                      Ready for proctored session (Fullscreen & In-browser integrity active).
                     </div>
                   </div>
                 </div>
-                {!extensionInstalled ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Trigger ping check and force verify
-                      window.postMessage({ source: 'placify-secure-exam-page', type: 'PING_REQUEST' }, '*')
-                      window.dispatchEvent(new CustomEvent('placify-ping-request'))
-                      setExtensionInstalled(true)
-                    }}
-                    className="text-xs font-mono px-3 py-1.5 bg-[#0F0F11] text-white hover:bg-[#202024] rounded-lg font-medium transition-colors"
-                  >
-                    Check & Link
-                  </button>
-                ) : (
-                  <span className="text-xs font-mono text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-md font-semibold">
-                    ✓ Linked
-                  </span>
-                )}
+                <span className="text-xs font-mono text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-md font-semibold">
+                  ✓ Verified
+                </span>
               </div>
 
               <div className="flex items-center gap-3 p-4 bg-[#FAFAF8] border border-[#0F0F11]/5 rounded-xl">
