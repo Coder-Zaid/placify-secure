@@ -6,49 +6,111 @@
 </head>
 <body>
   <div class="popup-container">
+    <!-- Brand Header with Logo -->
     <div class="header">
-      <div class="logo">PLACIFY</div>
-      <div class="subtitle">SECURE ASSESSMENT MONITOR</div>
+      <div class="brand-row">
+        <div class="logo-mark">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <!-- Outer Shield with Gradient -->
+            <path d="M12 2L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6l-9-4z" fill="url(#shieldGrad)" stroke="#15803d" stroke-width="1.5"/>
+            <!-- Locked Padlock Inside Shield -->
+            <rect x="8.5" y="11" width="7" height="6" rx="1.2" fill="#ffffff"/>
+            <path d="M10 11V9a2 2 0 1 1 4 0v2" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+            <circle cx="12" cy="14" r="0.8" fill="#15803d"/>
+            <defs>
+              <linearGradient id="shieldGrad" x1="3" y1="2" x2="21" y2="24" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#22c55e"/>
+                <stop offset="1" stop-color="#15803d"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <div class="brand-title-wrap">
+            <span class="brand-name">PLACIFY</span>
+            <span class="badge-secure">SECURE</span>
+          </div>
+          <div class="brand-subtitle">EXAM INTEGRITY MONITOR</div>
+        </div>
+      </div>
+      <div id="status-pill" class="status-pill idle">
+        <span class="pulse-dot"></span>
+        <span id="status-pill-text">STANDBY</span>
+      </div>
     </div>
-    
+
+    <!-- STATE 1: LOCKED & ACTIVE PROCTORING -->
+    <div id="active-exam" class="state-container">
+      <div class="lock-banner">
+        <div class="lock-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect x="4" y="10" width="16" height="12" rx="2.5" fill="#16a34a" fill-opacity="0.15" stroke="#16a34a" stroke-width="2"/>
+            <path d="M7.5 10V6.5a4.5 4.5 0 0 1 9 0V10" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"/>
+            <circle cx="12" cy="15.5" r="1.5" fill="#16a34a"/>
+            <path d="M12 17v2" stroke="#16a34a" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="lock-info">
+          <div class="lock-headline">SECURE SESSION LOCKED</div>
+          <div id="exam-access-code" class="lock-code">Exam Active</div>
+        </div>
+      </div>
+
+      <div class="exam-title-box">
+        <div class="box-label">ASSESSMENT</div>
+        <div id="exam-title" class="exam-title">Placify Proctored Assessment</div>
+      </div>
+
+      <!-- Stats Grid (Timer & Strikes) -->
+      <div id="stats-row" class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-label">TIME LEFT</div>
+          <div id="time-left" class="stat-value">Active</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">WARNINGS</div>
+          <div id="warning-count" class="stat-value">0/3</div>
+        </div>
+      </div>
+
+      <!-- Integrity Features Checklist -->
+      <div class="integrity-checklist">
+        <div class="check-item active">
+          <span class="check-dot">✓</span>
+          <span>Tab & window switch monitor</span>
+        </div>
+        <div class="check-item active">
+          <span class="check-dot">✓</span>
+          <span>Fullscreen integrity active</span>
+        </div>
+        <div class="check-item active">
+          <span class="check-dot">✓</span>
+          <span>Clipboard & right-click restricted</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATE 2: STANDBY / IDLE (NOT ON EXAM TAB) -->
     <div id="no-exam" class="state-container active">
-      <div class="icon-wrap">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-          <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+      <div class="icon-wrap standby">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+          <rect x="5" y="11" width="14" height="11" rx="2" fill="#0f172a" fill-opacity="0.06" stroke="#475569" stroke-width="1.8"/>
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="#475569" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="12" cy="16" r="1.3" fill="#475569"/>
         </svg>
       </div>
       <div class="text-content">
-        <p class="main-text">Monitor Disconnected / Idle</p>
-        <p class="sub-text">Open or focus a Placify assessment tab to link this extension.</p>
+        <p class="main-text">Proctor Guard Armed & Ready</p>
+        <p class="sub-text">Switch to or open your Placify assessment tab to automatically engage secure session lock.</p>
       </div>
+      <button id="open-exam-btn" class="action-btn" type="button">
+        Go to Assessment Portal
+      </button>
     </div>
 
-    <div id="active-exam" class="state-container">
-      <div class="exam-header">
-        <div id="exam-title" class="exam-title">Aptitude Assessment</div>
-        <div id="connection-status" class="connection-status">● Linked & Active</div>
-      </div>
-      
-      <div class="stats-grid">
-        <div class="stat-box">
-          <div class="stat-label">Time Remaining</div>
-          <div id="time-left" class="stat-value">00:00</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Warnings Logged</div>
-          <div id="warning-count" class="stat-value">0/1</div>
-        </div>
-      </div>
-
-      <div class="alert-box">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="alert-icon">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-          <line x1="12" y1="9" x2="12" y2="13"></line>
-          <line x1="12" y1="17" x2="12.01" y2="17"></line>
-        </svg>
-        <span>Exiting browser fullscreen or switching tabs will invalidate the session.</span>
-      </div>
+    <!-- Footer -->
+    <div class="footer">
+      <span>Placify Secure v1.0 • Standalone Proctor</span>
     </div>
   </div>
   <script src="popup.js"></script>

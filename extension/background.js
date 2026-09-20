@@ -1,8 +1,19 @@
 // Service Worker tracking active exams
 let activeExamTabs = {};
 
+// Update extension badge on active tab
+function updateBadge(tabId) {
+  if (tabId && activeExamTabs[tabId]) {
+    chrome.action.setBadgeText({ text: 'LOCK', tabId: tabId });
+    chrome.action.setBadgeBackgroundColor({ color: '#16a34a', tabId: tabId });
+  } else if (tabId) {
+    chrome.action.setBadgeText({ text: '', tabId: tabId });
+  }
+}
+
 // Listen for tab focus/switch updates
 chrome.tabs.onActivated.addListener((activeInfo) => {
+  updateBadge(activeInfo.tabId);
   chrome.tabs.get(activeInfo.tabId, (tab) => {
     if (chrome.runtime.lastError || !tab) return;
     
@@ -15,7 +26,7 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
           source: 'placify-secure-extension-bg',
           type: 'VIOLATION_EVENT',
           eventType: 'tab_switch'
-        });
+        }).catch(() => {});
       }
     });
   });
@@ -33,15 +44,32 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.source === 'placify-secure-content-script') {
     if (message.type === 'REGISTER_EXAM_TAB') {
-      activeExamTabs[sender.tab.id] = true;
+      if (sender.tab && sender.tab.id) {
+        activeExamTabs[sender.tab.id] = true;
+        updateBadge(sender.tab.id);
+
+        chrome.storage.local.set({
+          activeExam: {
+            title: message.title || 'Placify Proctored Assessment',
+            accessCode: message.accessCode || '',
+            url: message.url || '',
+            warningCount: 0,
+            maxWarnings: 3,
+            tabId: sender.tab.id
+          }
+        });
+      }
       sendResponse({ status: 'registered' });
     }
     if (message.type === 'UNREGISTER_EXAM_TAB') {
-      delete activeExamTabs[sender.tab.id];
+      if (sender.tab && sender.tab.id) {
+        delete activeExamTabs[sender.tab.id];
+        updateBadge(sender.tab.id);
+      }
+      chrome.storage.local.remove('activeExam');
       sendResponse({ status: 'unregistered' });
     }
     if (message.type === 'UPDATE_HUD_DATA') {
-      // Save details to extension storage for popup to display
       chrome.storage.local.set({
         activeExam: {
           title: message.title,

@@ -42,7 +42,8 @@ export default function StudentPortal() {
   const videoRef = useRef(null)
 
   // Pre-assessment checklist status
-  const [extensionInstalled, setExtensionInstalled] = useState(true)
+  const [extensionInstalled, setExtensionInstalled] = useState(false)
+  const [checkingExtension, setCheckingExtension] = useState(true)
   const [isFullscreenAllowed, setIsFullscreenAllowed] = useState(false)
   const [browserSupported, setBrowserSupported] = useState(false)
   const [onlineStatus, setOnlineStatus] = useState(navigator.onLine)
@@ -96,23 +97,28 @@ export default function StudentPortal() {
 
   // Monitor extension existence check
   useEffect(() => {
+    let lastPingReply = 0
+
     const markInstalled = () => {
+      lastPingReply = Date.now()
       setExtensionInstalled(true)
+      setCheckingExtension(false)
     }
 
-    const checkNow = () => {
+    const checkDom = () => {
       if (
         window.__PLACIFY_EXTENSION_INSTALLED__ === true ||
-        document.documentElement.getAttribute('data-placify-extension-installed') === 'true'
+        document.documentElement.getAttribute('data-placify-extension-installed') === 'true' ||
+        document.documentElement.getAttribute('data-placify-secure') === 'enabled'
       ) {
         markInstalled()
       }
     }
 
-    checkNow()
+    checkDom()
 
     const handlePingResponse = (e) => {
-      if (e.data && e.data.source === 'placify-secure-extension' && e.data.type === 'PING_RESPONSE') {
+      if (e.data && (e.data.source === 'placify-secure-extension' || e.data.source === 'placify-secure-content-script') && e.data.type === 'PING_RESPONSE') {
         markInstalled()
       }
     }
@@ -125,21 +131,33 @@ export default function StudentPortal() {
     window.addEventListener('placify-ping-response', handleCustomPing)
     window.addEventListener('placify-extension-ready', handleCustomPing)
     
-    // Ping extension
+    // Ping extension actively
     const sendPing = () => {
-      checkNow()
+      checkDom()
       window.postMessage({ source: 'placify-secure-exam-page', type: 'PING_REQUEST' }, '*')
       window.dispatchEvent(new CustomEvent('placify-ping-request'))
     }
 
     sendPing()
-    const interval = setInterval(sendPing, 800)
+
+    const initialTimeout = setTimeout(() => {
+      setCheckingExtension(false)
+    }, 1200)
+
+    const interval = setInterval(() => {
+      sendPing()
+      // If we previously marked it installed, but haven't received a ping reply in 2.5s, mark as not detected
+      if (lastPingReply > 0 && Date.now() - lastPingReply > 2500) {
+        setExtensionInstalled(false)
+      }
+    }, 1000)
 
     return () => {
       window.removeEventListener('message', handlePingResponse)
       window.removeEventListener('placify-ping-response', handleCustomPing)
       window.removeEventListener('placify-extension-ready', handleCustomPing)
       clearInterval(interval)
+      clearTimeout(initialTimeout)
     }
   }, [])
 
@@ -423,19 +441,61 @@ export default function StudentPortal() {
           <div className="space-y-4">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-[#0F0F11]">Pre-Exam System Readiness</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
-              <div className="flex items-center justify-between p-4 bg-[#FAFAF8] border border-[#0F0F11]/5 rounded-xl col-span-1 md:col-span-2">
+              <div className={`flex items-center justify-between p-4 rounded-xl col-span-1 md:col-span-2 border transition-all ${
+                extensionInstalled 
+                  ? 'bg-[#FAFAF8] border-green-200' 
+                  : checkingExtension 
+                    ? 'bg-[#FAFAF8] border-amber-200' 
+                    : 'bg-red-50/40 border-red-200'
+              }`}>
                 <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-green-500 ring-4 ring-green-100" />
+                  <div className={`w-3 h-3 rounded-full ${
+                    extensionInstalled 
+                      ? 'bg-green-500 ring-4 ring-green-100' 
+                      : checkingExtension 
+                        ? 'bg-amber-500 ring-4 ring-amber-100 animate-pulse' 
+                        : 'bg-red-500 ring-4 ring-red-100'
+                  }`} />
                   <div>
                     <div className="font-medium text-[#0F0F11]">Placify Secure Environment</div>
                     <div className="text-[11px] text-[#6F6F75] mt-0.5">
-                      Ready for proctored session (Fullscreen & In-browser integrity active).
+                      {extensionInstalled 
+                        ? 'Companion browser extension verified & integrity protection active.' 
+                        : checkingExtension 
+                          ? 'Checking browser for Placify Secure extension...' 
+                          : 'Extension not detected. Please install and enable the Proctor-Secure extension to continue.'}
                     </div>
                   </div>
                 </div>
-                <span className="text-xs font-mono text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-md font-semibold">
-                  ✓ Verified
-                </span>
+                <div className="flex items-center gap-2">
+                  {!extensionInstalled && !checkingExtension && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCheckingExtension(true)
+                        window.postMessage({ source: 'placify-secure-exam-page', type: 'PING_REQUEST' }, '*')
+                        window.dispatchEvent(new CustomEvent('placify-ping-request'))
+                        setTimeout(() => setCheckingExtension(false), 1200)
+                      }}
+                      className="text-[11px] font-mono px-2 py-1 bg-white hover:bg-gray-100 border border-gray-300 rounded text-gray-700 cursor-pointer shadow-xs transition-colors"
+                    >
+                      Re-check
+                    </button>
+                  )}
+                  <span className={`text-xs font-mono px-2.5 py-1 rounded-md font-semibold border ${
+                    extensionInstalled 
+                      ? 'text-green-700 bg-green-50 border-green-200' 
+                      : checkingExtension 
+                        ? 'text-amber-700 bg-amber-50 border-amber-200' 
+                        : 'text-red-700 bg-red-50 border-red-200'
+                  }`}>
+                    {extensionInstalled 
+                      ? '✓ Verified' 
+                      : checkingExtension 
+                        ? 'Detecting...' 
+                        : '✕ Not Detected'}
+                  </span>
+                </div>
               </div>
 
               <div className="flex items-center gap-3 p-4 bg-[#FAFAF8] border border-[#0F0F11]/5 rounded-xl">

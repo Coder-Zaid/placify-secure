@@ -1,11 +1,18 @@
 // Content Script running inside Placify Exam page
 let examPageActive = false;
 
-// Expose immediate indicator in DOM & Window
+// Expose immediate indicator in DOM & Window for standalone Proctor-Secure AND Placify main
 try {
   document.documentElement.setAttribute('data-placify-extension-installed', 'true');
+  document.documentElement.setAttribute('data-placify-secure', 'enabled');
+  window.PLACIFY_SECURE_EXTENSION_INSTALLED = true;
   const script = document.createElement('script');
-  script.textContent = `window.__PLACIFY_EXTENSION_INSTALLED__ = true; window.dispatchEvent(new CustomEvent('placify-extension-ready'));`;
+  script.textContent = `
+    window.__PLACIFY_EXTENSION_INSTALLED__ = true;
+    window.PLACIFY_SECURE_EXTENSION_INSTALLED = true;
+    document.documentElement.setAttribute('data-placify-secure', 'enabled');
+    window.dispatchEvent(new CustomEvent('placify-extension-ready'));
+  `;
   (document.head || document.documentElement).appendChild(script);
   script.remove();
 } catch (e) {}
@@ -14,9 +21,34 @@ try {
 window.addEventListener('placify-ping-request', () => {
   try {
     document.documentElement.setAttribute('data-placify-extension-installed', 'true');
+    document.documentElement.setAttribute('data-placify-secure', 'enabled');
+    window.PLACIFY_SECURE_EXTENSION_INSTALLED = true;
   } catch (e) {}
   window.dispatchEvent(new CustomEvent('placify-ping-response', { detail: { version: '1.0.0' } }));
 });
+
+// Auto-register exam tab immediately on page load if on assessment/exam route
+function announceExamTab() {
+  try {
+    const isExam = window.location.pathname.includes('/exam/') || window.location.pathname.includes('/assessments');
+    if (isExam) {
+      const match = window.location.pathname.match(/\/exam\/([A-Za-z0-9_-]+)/);
+      const accessCode = match ? match[1] : '';
+      const pageTitle = document.title || 'Placify Proctored Assessment';
+      
+      chrome.runtime.sendMessage({
+        source: 'placify-secure-content-script',
+        type: 'REGISTER_EXAM_TAB',
+        url: window.location.href,
+        accessCode: accessCode,
+        title: pageTitle
+      }).catch(() => {});
+    }
+  } catch (err) {}
+}
+
+announceExamTab();
+setTimeout(announceExamTab, 600);
 
 // 1. Listen for message communication from the web app page
 window.addEventListener('message', (event) => {
