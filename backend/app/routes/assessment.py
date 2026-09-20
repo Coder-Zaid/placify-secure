@@ -580,8 +580,12 @@ async def submit_attempt(assessment_id: int, request: SubmitAttemptRequest, db: 
     try:
         score = 0.0
         total_points = 0.0
+        correct_count = 0
         questions = assessment.questions or []
         graded_responses = {}
+        
+        # Check if the teacher configured answer keys for auto-grading
+        has_answer_keys = any(bool(q.get("answer", "").strip()) for q in questions if q.get("type") in ["mcq", "true_false", "short_answer"])
         
         for i, q in enumerate(questions):
             idx = str(i)
@@ -590,23 +594,25 @@ async def submit_attempt(assessment_id: int, request: SubmitAttemptRequest, db: 
             correct_answer = q.get("answer", "").strip()
             
             is_correct = False
-            if q["type"] in ["mcq", "true_false"]:
-                is_correct = student_answer.lower() == correct_answer.lower()
-            elif q["type"] == "short_answer":
-                is_correct = student_answer.lower().strip() == correct_answer.lower().strip()
-            elif q["type"] in ["long_answer", "coding"]:
-                is_correct = len(student_answer) > 10
+            if correct_answer:
+                if q["type"] in ["mcq", "true_false"]:
+                    is_correct = student_answer.lower() == correct_answer.lower()
+                elif q["type"] == "short_answer":
+                    is_correct = student_answer.lower().strip() == correct_answer.lower().strip()
+                elif q["type"] in ["long_answer", "coding"]:
+                    is_correct = len(student_answer) > 10
             
             if is_correct:
                 score += q.get("points", 1)
-            elif student_answer and q.get("negative_marking", 0) > 0:
+                correct_count += 1
+            elif student_answer and q.get("negative_marking", 0) > 0 and correct_answer:
                 score -= q.get("negative_marking", 0)
             
             graded_responses[idx] = {
                 "answer": student_answer,
-                "correct": is_correct,
-                "correct_answer": correct_answer,
-                "points_awarded": q.get("points", 1) if is_correct else (-q.get("negative_marking", 0) if student_answer else 0)
+                "correct": is_correct if has_answer_keys else None,
+                "correct_answer": correct_answer if has_answer_keys else "",
+                "points_awarded": (q.get("points", 1) if is_correct else (-q.get("negative_marking", 0) if student_answer else 0)) if has_answer_keys else None
             }
         
         score = max(0, score)
@@ -615,20 +621,26 @@ async def submit_attempt(assessment_id: int, request: SubmitAttemptRequest, db: 
         
         attempt.status = "completed"
         attempt.end_time = datetime.datetime.utcnow()
-        attempt.score = round(percentage, 1)
+        attempt.score = round(percentage, 1) if has_answer_keys else None
         attempt.responses = graded_responses
         
         db.commit()
         db.refresh(attempt)
         
+        answered_count = len([a for a in request.responses.values() if a and str(a).strip()])
+        
         return {
             "attempt_id": attempt.attempt_id,
             "status": "completed",
-            "score": attempt.score,
+            "has_answer_keys": has_answer_keys,
+            "score": round(percentage, 1) if has_answer_keys else None,
             "total_points": total_points,
-            "points_earned": score,
-            "passed": passed,
+            "points_earned": round(score, 1) if has_answer_keys else None,
+            "passed": passed if has_answer_keys else None,
             "passing_score": assessment.passing_score,
+            "correct_count": correct_count if has_answer_keys else None,
+            "total_questions": len(questions),
+            "answered_count": answered_count,
             "graded_responses": graded_responses,
             "completion_time": (attempt.end_time - attempt.start_time).total_seconds() if attempt.start_time else 0,
             "warning_count": attempt.warning_count,

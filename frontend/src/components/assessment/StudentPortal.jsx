@@ -358,33 +358,126 @@ export default function StudentPortal() {
         <AlertTriangle className="w-10 h-10 mx-auto text-red-500 stroke-[1.5]" />
         <h2 className="text-lg font-semibold text-[#0F0F11]">Access Failure</h2>
         <p className="text-sm text-[#6F6F75]">{errorInfo}</p>
-        <button onClick={() => navigate('/assessments')} className="btn-secondary w-full py-3">Return to Control Center</button>
+        <button onClick={() => navigate('/')} className="btn-secondary w-full py-3">
+          Enter Another Access Code
+        </button>
       </div>
     )
   }
 
   // 1. Completion Screen
   if (examCompleted && examResult) {
-    return (
-      <div className="max-w-xl mx-auto mt-16 q-card space-y-8">
-        <div className="text-center space-y-3">
-          <CheckCircle className="w-12 h-12 mx-auto text-green-600 stroke-[1.5]" />
-          <h2 className="text-2xl font-bold tracking-tight text-[#0F0F11]">Assessment Submitted</h2>
-          <p className="text-sm text-[#6F6F75]">Your responses have been successfully submitted and recorded.</p>
-        </div>
+    const hasAnswers = examResult.has_answer_keys !== false && typeof examResult.score === 'number'
+    const passed = examResult.passed
 
-        <div className="bg-[#FAFAF8] rounded-2xl border border-[#0F0F11]/5 p-6 text-center font-mono text-sm space-y-2">
-          <div className="text-xs text-[#A8A8AE] uppercase tracking-wider">Submission Status</div>
-          <div className="text-xl font-semibold text-green-600">CONFIRMED & RECEIVED</div>
-          <p className="text-xs text-[#6F6F75] mt-2 font-sans">
-            Results and evaluation will be reviewed by the administrator/instructor.
+    return (
+      <div className="max-w-xl mx-auto mt-12 q-card space-y-6 bg-white p-8 rounded-2xl border border-[#0F0F11]/5 shadow-sm">
+        <div className="text-center space-y-2">
+          <div className={`w-14 h-14 rounded-full mx-auto flex items-center justify-center ${
+            hasAnswers 
+              ? (passed ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600')
+              : 'bg-green-100 text-green-600'
+          }`}>
+            <CheckCircle className="w-8 h-8 stroke-[2]" />
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight text-[#0F0F11]">
+            {hasAnswers ? 'Assessment Result' : 'Successfully Submitted'}
+          </h2>
+          <p className="text-xs text-[#6F6F75] max-w-sm mx-auto">
+            {hasAnswers
+              ? 'Your assessment has been evaluated against the answer benchmark.'
+              : 'Your responses have been successfully recorded and submitted.'}
           </p>
         </div>
 
-        <div className="space-y-3">
-          <button onClick={() => navigate('/assessments')} className="btn-primary w-full py-3">
-            Exit Assessment
+        {/* Dynamic Section: If teacher put in answers -> Show Result! */}
+        {hasAnswers ? (
+          <div className="space-y-4">
+            <div className={`p-6 rounded-2xl border text-center space-y-2 ${
+              passed ? 'bg-green-50/40 border-green-200' : 'bg-amber-50/40 border-amber-200'
+            }`}>
+              <div className="text-xs uppercase font-mono tracking-wider font-semibold text-[#6F6F75]">
+                Your Score
+              </div>
+              <div className={`text-4xl font-extrabold font-mono ${
+                passed ? 'text-green-700' : 'text-amber-700'
+              }`}>
+                {examResult.score}%
+              </div>
+              <div className="pt-1">
+                <span className={`inline-block text-xs font-semibold px-3 py-1 rounded-full border ${
+                  passed 
+                    ? 'bg-green-100 text-green-800 border-green-300' 
+                    : 'bg-amber-100 text-amber-800 border-amber-300'
+                }`}>
+                  {passed ? '✓ PASSED BENCHMARK' : 'DID NOT MEET PASSING SCORE'}
+                </span>
+              </div>
+              <p className="text-[11px] text-[#6F6F75] mt-1">
+                Passing requirement: {examResult.passing_score}% • Points: {examResult.points_earned ?? 0} / {examResult.total_points ?? 0}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+              <div className="p-3 bg-[#FAFAF8] border border-[#0F0F11]/5 rounded-xl text-center">
+                <div className="text-[#A8A8AE] text-[10px] uppercase">Correct Questions</div>
+                <div className="text-base font-bold text-[#0F0F11] mt-1">
+                  {examResult.correct_count ?? '—'} / {examResult.total_questions ?? assessmentInfo.questions?.length ?? '—'}
+                </div>
+              </div>
+              <div className="p-3 bg-[#FAFAF8] border border-[#0F0F11]/5 rounded-xl text-center">
+                <div className="text-[#A8A8AE] text-[10px] uppercase">Time Elapsed</div>
+                <div className="text-base font-bold text-[#0F0F11] mt-1">
+                  {formatTime(examResult.completion_time || 0)}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Dynamic Section: If teacher DID NOT put in answers -> Just show Successfully Submitted! */
+          <div className="p-6 bg-green-50/40 rounded-2xl border border-green-200 text-center space-y-3">
+            <div className="text-xs uppercase font-mono tracking-wider text-green-700 font-semibold">
+              Submission Confirmed
+            </div>
+            <div className="text-2xl font-bold text-green-800 font-sans">
+              Successfully Submitted
+            </div>
+            <p className="text-xs text-[#6F6F75] max-w-md mx-auto leading-relaxed">
+              Your test responses have been received and saved. Your answers will be reviewed and evaluated by your instructor.
+            </p>
+            <div className="pt-2 flex items-center justify-center gap-6 text-xs font-mono text-[#6F6F75]">
+              <span>Questions Answered: <strong className="text-[#0F0F11]">{examResult.answered_count ?? Object.keys(responses).length}</strong></span>
+              <span>•</span>
+              <span>Total Time: <strong className="text-[#0F0F11]">{formatTime(examResult.completion_time || 0)}</strong></span>
+            </div>
+          </div>
+        )}
+
+        {/* Security & Integrity Status */}
+        <div className="p-3.5 bg-[#FAFAF8] border border-[#0F0F11]/5 rounded-xl flex items-center justify-between text-xs font-mono text-[#6F6F75]">
+          <span>Security Integrity Check</span>
+          <span className={`font-semibold ${
+            (examResult.warning_count || 0) === 0 ? 'text-green-600' : 'text-amber-600'
+          }`}>
+            {(examResult.warning_count || 0) === 0 ? '✓ Clean Record (0 Warnings)' : `${examResult.warning_count} Warnings Logged`}
+          </span>
+        </div>
+
+        {/* Close Window Button (NO link to /assessments admin page) */}
+        <div className="space-y-2 pt-2 border-t border-[#0F0F11]/5">
+          <button 
+            type="button" 
+            onClick={() => {
+              window.close()
+              alert("Your assessment has been submitted. You can now safely close this browser window.")
+            }} 
+            className="btn-primary w-full py-3.5 text-center font-medium cursor-pointer"
+          >
+            Close Session Window
           </button>
+          <p className="text-[11px] text-center text-[#A8A8AE]">
+            Your session is closed. You may safely exit or close this browser tab.
+          </p>
         </div>
       </div>
     )
@@ -399,7 +492,16 @@ export default function StudentPortal() {
         <p className="text-sm text-[#6F6F75] leading-relaxed">
           Suspicious activity has been repeatedly detected. Your current responses have been submitted automatically, and your exam session has been locked.
         </p>
-        <button onClick={() => navigate('/assessments')} className="btn-secondary w-full py-3">Return to Dashboard</button>
+        <button 
+          type="button"
+          onClick={() => {
+            window.close()
+            alert("Assessment terminated. You can now close this window.")
+          }} 
+          className="btn-secondary w-full py-3"
+        >
+          Close Session
+        </button>
       </div>
     )
   }
