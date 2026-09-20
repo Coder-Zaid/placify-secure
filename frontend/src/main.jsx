@@ -18,6 +18,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/assessments/:id/edit" element={<AssessmentBuilder />} />
         <Route path="/assessments/:id/analytics" element={<AssessmentAnalytics />} />
         <Route path="/exam/:accessCode" element={<StudentPortal />} />
+        <Route path="/assesments" element={<Navigate to="/assessments" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,
