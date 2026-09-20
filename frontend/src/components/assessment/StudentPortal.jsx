@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Shield, Clock, AlertTriangle, AlertCircle, CheckCircle, Info, Play, Wifi } from 'lucide-react'
 import axios from 'axios'
 import { useSecureExam } from '../../hooks/useSecureExam'
+import AntiAiWatermark from './AntiAiWatermark'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001';
 
@@ -746,7 +747,15 @@ export default function StudentPortal() {
           
           {/* Question Workspace Content */}
           {questions.map((q, qIdx) => (
-            <div key={qIdx} className="w-full q-card space-y-6 bg-white border border-[#0F0F11]/5 shadow-sm rounded-xl p-6">
+            <div key={qIdx} className="relative overflow-hidden w-full q-card space-y-6 bg-white border border-[#0F0F11]/5 shadow-sm rounded-xl p-6">
+              {/* Anti-AI Watermark, Forensic Stamping & Camera Optical Disrupter */}
+              <AntiAiWatermark 
+                studentName={studentName}
+                rollNumber={rollNumber}
+                attemptId={attemptId}
+                accessCode={assessmentInfo?.access_code}
+              />
+
               <div className="flex justify-between items-center border-b border-[#0F0F11]/5 pb-4">
                 <span className="text-xs font-mono text-[#A8A8AE] uppercase tracking-wider">
                   Question {qIdx + 1} of {questions.length} • {q.points} Points
