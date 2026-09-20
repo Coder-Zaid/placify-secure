@@ -6,6 +6,7 @@ import AssessmentDashboard from './components/assessment/AssessmentDashboard'
 import AssessmentBuilder from './components/assessment/AssessmentBuilder'
 import StudentPortal from './components/assessment/StudentPortal'
 import AssessmentAnalytics from './components/assessment/AssessmentAnalytics'
+import NotFound from './components/common/NotFound'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -19,7 +20,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/assessments/:id/analytics" element={<AssessmentAnalytics />} />
         <Route path="/exam/:accessCode" element={<StudentPortal />} />
         <Route path="/assesments" element={<Navigate to="/assessments" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,
