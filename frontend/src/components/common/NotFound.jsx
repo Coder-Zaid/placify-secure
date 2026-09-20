@@ -34,7 +34,7 @@ export default function NotFound() {
         </Link>
 
         <Link
-          to="/assessments"
+          to="/instructor/login"
           className="text-xs font-mono text-[#6F6F75] hover:text-[#0F0F11] transition-colors flex items-center gap-1.5"
         >
           <KeyRound className="w-3.5 h-3.5" />
@@ -92,7 +92,7 @@ export default function NotFound() {
             <span>Student Portal</span>
           </Link>
           <Link
-            to="/assessments"
+            to="/instructor/login"
             className="btn-secondary py-3 text-xs flex items-center justify-center gap-2"
           >
             <KeyRound className="w-4 h-4" />

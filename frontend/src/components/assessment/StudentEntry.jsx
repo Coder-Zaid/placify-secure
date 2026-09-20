@@ -37,7 +37,7 @@ export default function StudentEntry() {
         </div>
 
         <Link
-          to="/assessments"
+          to="/instructor/login"
           className="text-xs font-mono text-[#6F6F75] hover:text-[#0F0F11] transition-colors flex items-center gap-1.5"
         >
           <KeyRound className="w-3.5 h-3.5" />

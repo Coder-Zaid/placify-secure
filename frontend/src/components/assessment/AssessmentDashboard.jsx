@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, BarChart2, ShieldAlert, Clock, Copy, Check, Power, AlertTriangle, Eye, Trash2 } from 'lucide-react'
+import { Plus, BarChart2, ShieldAlert, Clock, Copy, Check, Power, AlertTriangle, Eye, Trash2, LogOut } from 'lucide-react'
 import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001';
@@ -82,10 +82,24 @@ export default function AssessmentDashboard() {
           </div>
         </div>
 
-        <Link to="/assessments/new" className="btn-primary flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Create Assessment
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              sessionStorage.removeItem('placify_instructor_auth')
+              localStorage.removeItem('placify_instructor_auth')
+              window.location.href = '/instructor/login'
+            }}
+            className="btn-secondary flex items-center gap-1.5 text-xs text-[#6F6F75] hover:text-red-600 border-[#0F0F11]/10 hover:border-red-200 hover:bg-red-50/50 py-2.5 px-3.5 cursor-pointer"
+            title="Sign out of instructor session"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
+          <Link to="/assessments/new" className="btn-primary flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            Create Assessment
+          </Link>
+        </div>
       </div>
 
       <div className="flex justify-between items-end">
