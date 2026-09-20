@@ -57,9 +57,9 @@ export default function AssessmentDashboard() {
     }
   }
 
-  const copyToClipboard = (code) => {
-    navigator.clipboard.writeText(code)
-    setCopiedCode(code)
+  const copyToClipboard = (text, codeKey) => {
+    navigator.clipboard.writeText(text)
+    setCopiedCode(codeKey || text)
     setTimeout(() => setCopiedCode(null), 2000)
   }
 
@@ -176,11 +176,23 @@ export default function AssessmentDashboard() {
                             {a.access_code}
                           </span>
                           <button
-                            onClick={() => copyToClipboard(`${window.location.origin}/exam/${a.access_code}`)}
-                            className="text-[#6F6F75] hover:text-[#0F0F11] p-1 transition-colors"
-                            title="Copy student link"
+                            type="button"
+                            onClick={() => copyToClipboard(`${window.location.origin}/exam/${a.access_code}`, a.access_code)}
+                            className={`p-1.5 rounded-lg transition-all duration-200 flex items-center gap-1 cursor-pointer ${
+                              copiedCode === a.access_code
+                                ? 'bg-green-100 text-green-700 font-medium scale-105 shadow-xs'
+                                : 'text-[#6F6F75] hover:text-[#0F0F11] hover:bg-[#0F0F11]/5'
+                            }`}
+                            title={copiedCode === a.access_code ? 'Copied to clipboard!' : 'Copy student link'}
                           >
-                            {copiedCode === a.access_code ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedCode === a.access_code ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-green-600 stroke-[2.5]" />
+                                <span className="text-[10px] font-sans font-semibold text-green-700">Copied!</span>
+                              </>
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
                           </button>
                         </div>
                       ) : (
