@@ -243,6 +243,9 @@ export default function AssessmentBuilder() {
     setDurationMinutes(tmpl.duration_minutes)
     setPassingScore(tmpl.passing_score)
     setQuestions(tmpl.questions || [])
+    if (tmpl.security_policy) {
+      setSecurityPolicy(tmpl.security_policy)
+    }
   }
 
   const handleAddQuestion = (type = 'mcq') => {

@@ -13,6 +13,7 @@ from models import (
     StartAttemptRequest, SubmitAttemptRequest, ViolationEventRequest,
     SyncResponsesRequest, SecurityPolicySchema
 )
+from seed import QUESTIONS_SET_D, POLICY_SET_D, QUESTIONS_DAA_INTERNAL_II, POLICY_DAA
 
 router = APIRouter(prefix="/assessment", tags=["assessment"])
 
@@ -28,6 +29,24 @@ def generate_access_code(length=8):
 # ============================================================================
 
 ASSESSMENT_TEMPLATES = [
+    {
+        "id": "aptitude_set_d_mba",
+        "title": "Aptitude Test (Set D) - MBA-Trimester 1 (30 marks)",
+        "description": "Official 35-question MBA aptitude assessment: 5 student identification fields + 30 aptitude & reasoning questions. 30 mins, 4 warnings max, blur detection disabled.",
+        "duration_minutes": 30,
+        "passing_score": 40,
+        "security_policy": POLICY_SET_D,
+        "questions": QUESTIONS_SET_D
+    },
+    {
+        "id": "daa_internal_ii_gate",
+        "title": "Practice Problems for Internal-II (DAA - GATE Style)",
+        "description": "Comprehensive 19 problem-solving questions: Red-Black Trees, Greedy Algorithms, Dynamic Programming, and Backtracking with answer checkpoints. 45 mins, 4 warnings.",
+        "duration_minutes": 45,
+        "passing_score": 50,
+        "security_policy": POLICY_DAA,
+        "questions": QUESTIONS_DAA_INTERNAL_II
+    },
     {
         "id": "aptitude_basic",
         "title": "Sample Aptitude Assessment",
