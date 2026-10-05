@@ -21,6 +21,8 @@ wheels/
 .installed.cfg
 *.egg
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 backend/app/placify_secure.db
 backend/placify_secure.db
@@ -46,3 +48,19 @@ frontend/*.local
 .idea/
 .DS_Store
 Thumbs.db
+
+# Temporary scratch and OCR dumps
+*.png
+!frontend/public/assessment_images/*.png
+*.jpg
+*.csv
+*.rar
+*.zip
+*.ps1
+WinOcr.cs
+ocr_*.txt
+answers_detected.txt
+extracted_aptitude_test.txt
+slices/
+extract_all_ocr.py
+check_all_answers.py

@@ -4,6 +4,7 @@ export function useSecureExam({
   attemptId,
   assessmentId,
   policy = {},
+  isSubmitting = false,
   onWarning,
   onTerminate,
   onLogViolation
@@ -17,7 +18,7 @@ export function useSecureExam({
   const blurTimeoutRef = useRef(null)
   const lastEventTimeRef = useRef(Date.now())
 
-  const maxWarnings = policy.max_warnings ?? 1
+  const maxWarnings = policy.max_warnings ?? 4
   const gracePeriodSeconds = policy.grace_period_seconds ?? 2
 
   // 1. Detect browser name and OS info
@@ -53,12 +54,13 @@ export function useSecureExam({
   }
 
   const triggerViolation = (eventType, duration = 0.0) => {
+    if (isSubmitting) return
     setWarningCount(prev => {
       const nextCount = prev + 1
       logViolationEvent(eventType, duration)
       
-      // Immediate termination events
-      const immediateTerminationEvents = ["dev_tools", "extension_removed", "multiple_tabs"]
+      // Immediate termination events (only explicit developer tools or unauthorized tab switches past warnings)
+      const immediateTerminationEvents = ["dev_tools", "multiple_tabs"]
       
       if (immediateTerminationEvents.includes(eventType) || nextCount > maxWarnings) {
         if (onTerminate) onTerminate(eventType)
@@ -70,10 +72,11 @@ export function useSecureExam({
   }
 
   useEffect(() => {
-    if (!attemptId) return
+    if (!attemptId || isSubmitting) return
 
     // 2. Fullscreen Enforcement
     const handleFullscreenChange = () => {
+      if (isSubmitting) return
       const activeFS = !!document.fullscreenElement
       setIsFullscreen(activeFS)
       
@@ -85,6 +88,7 @@ export function useSecureExam({
 
     // 3. Tab Visibility (Visibility API)
     const handleVisibilityChange = () => {
+      if (isSubmitting) return
       const isVisible = document.visibilityState === 'visible'
       setIsExamTabActive(isVisible)
       
@@ -96,14 +100,14 @@ export function useSecureExam({
 
     // 4. Window Focus / Blur with Grace Period
     const handleWindowBlur = () => {
-      if (policy.detect_window_blur) {
-        lastEventTimeRef.current = Date.now()
-        // Wait for grace period before triggering violation to ignore notifications or system dialogues
-        blurTimeoutRef.current = setTimeout(() => {
-          const duration = (Date.now() - lastEventTimeRef.current) / 1000
-          triggerViolation("window_blur", duration)
-        }, gracePeriodSeconds * 1000)
-      }
+      if (isSubmitting || !policy.detect_window_blur) return
+      lastEventTimeRef.current = Date.now()
+      // Wait for grace period before triggering violation to ignore notifications or system dialogues
+      blurTimeoutRef.current = setTimeout(() => {
+        if (isSubmitting || !policy.detect_window_blur) return
+        const duration = (Date.now() - lastEventTimeRef.current) / 1000
+        triggerViolation("window_blur", duration)
+      }, Math.max(gracePeriodSeconds, 3) * 1000)
     }
 
     const handleWindowFocus = () => {
@@ -160,15 +164,17 @@ export function useSecureExam({
     }
     window.addEventListener("keydown", handleKeyDown)
 
-    // 6. Communication with companion extension
+    // 6. Robust Communication with companion extension
     let lastPingReceived = Date.now()
+    let consecutiveMissingChecks = 0
     
     const handleExtensionMessage = (e) => {
-      if (e.data && e.data.source === 'placify-secure-extension') {
-        if (e.data.type === 'PING_RESPONSE') {
+      if (e.data && (e.data.source === 'placify-secure-extension' || e.data.source === 'placify-secure-content-script')) {
+        if (e.data.type === 'PING_RESPONSE' || e.data.type === 'HEARTBEAT') {
           setIsExtensionActive(true)
-          setExtensionVersion(e.data.version)
+          if (e.data.version) setExtensionVersion(e.data.version)
           lastPingReceived = Date.now()
+          consecutiveMissingChecks = 0
         }
         if (e.data.type === 'VIOLATION_EVENT') {
           triggerViolation(e.data.eventType)
@@ -177,19 +183,46 @@ export function useSecureExam({
     }
     window.addEventListener("message", handleExtensionMessage)
 
+    // Helper: Multi-layer extension check (DOM markers, window globals, & ping responses)
+    const verifyExtensionActive = () => {
+      const hasDomMarker = 
+        document.documentElement.getAttribute('data-placify-extension-installed') === 'true' ||
+        document.documentElement.getAttribute('data-placify-secure') === 'enabled'
+      const hasWindowGlobal = 
+        window.__PLACIFY_EXTENSION_INSTALLED__ === true ||
+        window.PLACIFY_SECURE_EXTENSION_INSTALLED === true
+      const hasRecentPing = (Date.now() - lastPingReceived) < 45000
+
+      return hasDomMarker || hasWindowGlobal || hasRecentPing
+    }
+
+    // Set initial presence if DOM markers already exist
+    if (verifyExtensionActive()) {
+      setIsExtensionActive(true)
+      lastPingReceived = Date.now()
+    }
+
     // Initial ping to extension
     window.postMessage({ source: 'placify-secure-exam-page', type: 'PING_REQUEST' }, '*')
 
-    // Extension heartbeat monitoring
+    // Extension heartbeat monitoring (every 5 seconds)
     const extensionCheckInterval = setInterval(() => {
       window.postMessage({ source: 'placify-secure-exam-page', type: 'PING_REQUEST' }, '*')
       
-      // If we haven't received a ping response in the last 12 seconds, assume extension is removed
-      if (Date.now() - lastPingReceived > 12000) {
-        if (policy.detect_extension_removal) {
-          triggerViolation("extension_removed")
+      const isPresent = verifyExtensionActive()
+      if (isPresent) {
+        setIsExtensionActive(true)
+        consecutiveMissingChecks = 0
+        lastPingReceived = Date.now()
+      } else {
+        consecutiveMissingChecks += 1
+        // Require at least 4 consecutive failed checks (20 seconds) with no DOM marker or ping before warning
+        if (consecutiveMissingChecks >= 4) {
+          setIsExtensionActive(false)
+          if (policy.detect_extension_removal) {
+            triggerViolation("extension_removed")
+          }
         }
-        setIsExtensionActive(false)
       }
     }, 5000)
 

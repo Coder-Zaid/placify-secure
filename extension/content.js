@@ -1,84 +1,124 @@
-// Content Script running inside Placify Exam page
+// Placify Secure — Content Script
+// This script ONLY runs on Placify domains and local dev servers
+// as declared in manifest.json content_scripts.matches.
+// It never injects into banks, email, social media, or any external site.
+
 let examPageActive = false;
 
-// Expose immediate indicator in DOM & Window for standalone Proctor-Secure AND Placify main
-try {
-  document.documentElement.setAttribute('data-placify-extension-installed', 'true');
-  document.documentElement.setAttribute('data-placify-secure', 'enabled');
-  window.PLACIFY_SECURE_EXTENSION_INSTALLED = true;
-  const script = document.createElement('script');
-  script.textContent = `
-    window.__PLACIFY_EXTENSION_INSTALLED__ = true;
-    window.PLACIFY_SECURE_EXTENSION_INSTALLED = true;
-    document.documentElement.setAttribute('data-placify-secure', 'enabled');
-    window.dispatchEvent(new CustomEvent('placify-extension-ready'));
-  `;
-  (document.head || document.documentElement).appendChild(script);
-  script.remove();
-} catch (e) {}
-
-// Also respond via CustomEvent as well as postMessage
-window.addEventListener('placify-ping-request', () => {
+// ---------------------------------------------------------------------------
+// 1. DOM & Window Signals — Expose presence markers for the exam page to detect
+// ---------------------------------------------------------------------------
+function applyDomMarkers() {
   try {
-    document.documentElement.setAttribute('data-placify-extension-installed', 'true');
-    document.documentElement.setAttribute('data-placify-secure', 'enabled');
-    window.PLACIFY_SECURE_EXTENSION_INSTALLED = true;
+    if (document.documentElement) {
+      document.documentElement.setAttribute('data-placify-extension-installed', 'true');
+      document.documentElement.setAttribute('data-placify-secure', 'enabled');
+    }
+    if (document.body) {
+      document.body.setAttribute('data-placify-extension-installed', 'true');
+      document.body.setAttribute('data-placify-secure', 'enabled');
+    }
   } catch (e) {}
-  window.dispatchEvent(new CustomEvent('placify-ping-response', { detail: { version: '1.0.0' } }));
-});
+}
 
-// Auto-register exam tab immediately on page load if on assessment/exam route
+applyDomMarkers();
+document.addEventListener('DOMContentLoaded', applyDomMarkers);
+window.addEventListener('load', applyDomMarkers);
+
+// Note: Global window flags are injected natively via injected.js (world: "MAIN")
+// to prevent any Content Security Policy (CSP) inline-script violation.
+
+// ---------------------------------------------------------------------------
+// 2. Ping / Heartbeat — Respond to the exam page's liveness checks
+// ---------------------------------------------------------------------------
+function replyToPing() {
+  applyDomMarkers();
+  window.dispatchEvent(
+    new CustomEvent('placify-ping-response', { detail: { version: '1.1.0' } })
+  );
+  window.postMessage({
+    source: 'placify-secure-extension',
+    type: 'PING_RESPONSE',
+    version: '1.1.0'
+  }, '*');
+}
+
+window.addEventListener('placify-ping-request', replyToPing);
+
+// Periodic heartbeat: continuously broadcast presence to the page and maintain DOM attribute
+setInterval(() => {
+  applyDomMarkers();
+  window.postMessage({
+    source: 'placify-secure-extension',
+    type: 'HEARTBEAT',
+    version: '1.1.0'
+  }, '*');
+}, 2000);
+
+// ---------------------------------------------------------------------------
+// 3. Auto-Register Exam Tab — Inform background service worker
+// ---------------------------------------------------------------------------
 function announceExamTab() {
   try {
-    const isExam = window.location.pathname.includes('/exam/') || window.location.pathname.includes('/assessments');
-    if (isExam) {
-      const match = window.location.pathname.match(/\/exam\/([A-Za-z0-9_-]+)/);
-      const accessCode = match ? match[1] : '';
-      const pageTitle = document.title || 'Placify Proctored Assessment';
-      
-      chrome.runtime.sendMessage({
-        source: 'placify-secure-content-script',
-        type: 'REGISTER_EXAM_TAB',
-        url: window.location.href,
-        accessCode: accessCode,
-        title: pageTitle
-      }).catch(() => {});
-    }
-  } catch (err) {}
+    const isExam =
+      window.location.pathname.includes('/exam/') ||
+      window.location.pathname.includes('/assessments');
+    if (!isExam) return;
+
+    const match = window.location.pathname.match(/\/exam\/([A-Za-z0-9_-]+)/);
+    const accessCode = match ? match[1] : '';
+    const pageTitle = document.title || 'Placify Proctored Assessment';
+
+    chrome.runtime.sendMessage({
+      source: 'placify-secure-content-script',
+      type: 'REGISTER_EXAM_TAB',
+      url: window.location.href,
+      accessCode: accessCode,
+      title: pageTitle
+    }).catch(() => {});
+  } catch (err) {
+    // Extension context may be invalidated on quick navigations
+  }
 }
 
 announceExamTab();
 setTimeout(announceExamTab, 600);
 
-// 1. Listen for message communication from the web app page
+// ---------------------------------------------------------------------------
+// 4. Page ↔ Extension Message Bridge
+// ---------------------------------------------------------------------------
 window.addEventListener('message', (event) => {
-  // Only handle messages coming from our own page
+  // Only handle messages originating from our own page
   if (event.source !== window) return;
+  if (!event.data) return;
 
-  if (event.data && event.data.source === 'placify-secure-exam-page') {
-    if (event.data.type === 'PING_REQUEST') {
-      // Set DOM indicator
-      try {
-        document.documentElement.setAttribute('data-placify-extension-installed', 'true');
-      } catch (e) {}
+  if (event.data.type === 'PING_REQUEST') {
+    applyDomMarkers();
+    window.postMessage({
+      source: 'placify-secure-extension',
+      type: 'PING_RESPONSE',
+      version: '1.1.0'
+    }, '*');
+    window.dispatchEvent(
+      new CustomEvent('placify-ping-response', { detail: { version: '1.1.0' } })
+    );
 
-      // Respond immediately to let page know extension is installed
-      window.postMessage({
-        source: 'placify-secure-extension',
-        type: 'PING_RESPONSE',
-        version: '1.0.0'
-      }, '*');
-
-      if (!examPageActive) {
-        examPageActive = true;
-        chrome.runtime.sendMessage({
-          source: 'placify-secure-content-script',
-          type: 'REGISTER_EXAM_TAB'
-        }).catch(() => {});
-      }
+    // Register with background on first ping
+    if (!examPageActive) {
+      examPageActive = true;
+      chrome.runtime.sendMessage({
+        source: 'placify-secure-content-script',
+        type: 'REGISTER_EXAM_TAB'
+      }).catch(() => {});
     }
+    return;
+  }
 
-    if (event.data.type === 'UPDATE_HUD') {
+  if (event.data.source !== 'placify-secure-exam-page') return;
+
+  switch (event.data.type) {
+
+    case 'UPDATE_HUD':
       chrome.runtime.sendMessage({
         source: 'placify-secure-content-script',
         type: 'UPDATE_HUD_DATA',
@@ -86,32 +126,39 @@ window.addEventListener('message', (event) => {
         timeLeft: event.data.timeLeft,
         warningCount: event.data.warningCount,
         maxWarnings: event.data.maxWarnings
-      });
-    }
+      }).catch(() => {});
+      break;
+
+    default:
+      break;
   }
 });
 
-// 2. Listen to violation broadcasts from background.js service worker
+// ---------------------------------------------------------------------------
+// 5. Receive Violation Events from Background Service Worker
+// ---------------------------------------------------------------------------
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.source === 'placify-secure-extension-bg') {
-    if (message.type === 'VIOLATION_EVENT') {
-      // Relay the violation directly into the page's window context
-      window.postMessage({
-        source: 'placify-secure-extension',
-        type: 'VIOLATION_EVENT',
-        eventType: message.eventType
-      }, '*');
-    }
+  if (message.source !== 'placify-secure-extension-bg') return;
+
+  if (message.type === 'VIOLATION_EVENT') {
+    // Relay the violation into the page's window context
+    window.postMessage({
+      source: 'placify-secure-extension',
+      type: 'VIOLATION_EVENT',
+      eventType: message.eventType
+    }, '*');
   }
 });
 
-// Clean up registration on window unload
+// ---------------------------------------------------------------------------
+// 6. Cleanup on Tab Close / Navigation Away
+// ---------------------------------------------------------------------------
 window.addEventListener('beforeunload', () => {
   if (examPageActive) {
     chrome.runtime.sendMessage({
       source: 'placify-secure-content-script',
       type: 'UNREGISTER_EXAM_TAB'
-    });
+    }).catch(() => {});
     chrome.storage.local.remove('activeExam');
   }
 });

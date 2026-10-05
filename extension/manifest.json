@@ -1,28 +1,33 @@
 {
   "manifest_version": 3,
   "name": "Placify Secure Assessment Monitor",
-  "version": "1.0.0",
-  "description": "Companion integrity monitor for the Placify Secure Assessment Platform.",
+  "version": "1.1.0",
+  "description": "Companion integrity monitor for the Placify Secure Assessment Platform. Enforces tab-switch detection, fullscreen monitoring, and exam lockdown during proctored assessments on Placify domains.",
+
   "permissions": [
-    "tabs",
-    "activeTab",
     "storage"
   ],
+
+  "optional_permissions": [
+    "tabs"
+  ],
+
   "host_permissions": [
-    "http://localhost/*",
     "http://localhost:5173/*",
     "http://localhost:5174/*",
     "http://localhost:5175/*",
     "http://localhost:3000/*",
-    "http://localhost:8000/*",
-    "http://localhost:8001/*",
-    "http://127.0.0.1/*",
     "http://127.0.0.1:5173/*",
     "http://127.0.0.1:5174/*",
-    "http://127.0.0.1:8000/*",
-    "http://127.0.0.1:8001/*",
+    "https://*.placify.in/*",
+    "https://*.placify.app/*",
+    "https://*.placifysecure.com/*",
+    "https://*.woxsen.edu.in/*",
+    "https://*.itsprelude.com/*",
+    "https://examz.itsprelude.com/*",
     "<all_urls>"
   ],
+
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -31,33 +36,54 @@
       "128": "icons/icon128.png"
     }
   },
+
   "background": {
     "service_worker": "background.js"
   },
+
   "content_scripts": [
     {
       "matches": [
-        "http://localhost/*",
         "http://localhost:5173/*",
         "http://localhost:5174/*",
         "http://localhost:5175/*",
         "http://localhost:3000/*",
-        "http://localhost:8000/*",
-        "http://localhost:8001/*",
-        "http://127.0.0.1/*",
         "http://127.0.0.1:5173/*",
         "http://127.0.0.1:5174/*",
-        "http://127.0.0.1:8000/*",
-        "http://127.0.0.1:8001/*",
-        "https://*/*",
-        "http://*/*",
+        "https://*.placify.in/*",
+        "https://*.placify.app/*",
+        "https://*.placifysecure.com/*",
+        "https://*.woxsen.edu.in/*",
+        "https://*.itsprelude.com/*",
+        "https://examz.itsprelude.com/*",
+        "<all_urls>"
+      ],
+      "js": ["injected.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "http://localhost:5173/*",
+        "http://localhost:5174/*",
+        "http://localhost:5175/*",
+        "http://localhost:3000/*",
+        "http://127.0.0.1:5173/*",
+        "http://127.0.0.1:5174/*",
+        "https://*.placify.in/*",
+        "https://*.placify.app/*",
+        "https://*.placifysecure.com/*",
+        "https://*.woxsen.edu.in/*",
+        "https://*.itsprelude.com/*",
+        "https://examz.itsprelude.com/*",
         "<all_urls>"
       ],
       "js": ["content.js"],
       "run_at": "document_start",
-      "all_frames": true
+      "all_frames": false
     }
   ],
+
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

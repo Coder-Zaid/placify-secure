@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ChevronLeft, BarChart2, ShieldAlert, Clock, AlertTriangle, Users, Search, RefreshCw, X, Eye, FileText, CheckCircle2, XCircle } from 'lucide-react'
+import { ChevronLeft, BarChart2, ShieldAlert, Clock, AlertTriangle, Users, Search, RefreshCw, X, Eye, FileText, CheckCircle2, XCircle, Download } from 'lucide-react'
 import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001';
@@ -15,11 +15,12 @@ export default function AssessmentAnalytics() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedStudent, setSelectedStudent] = useState(null)
+  const [selectedSnapshot, setSelectedSnapshot] = useState(null)
   const [lastRefreshed, setLastRefreshed] = useState(new Date())
 
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 4000) // Poll every 4 seconds for live updates
+    const interval = setInterval(fetchData, 8000) // Poll every 8 seconds for live updates
     return () => clearInterval(interval)
   }, [id])
 
@@ -96,6 +97,15 @@ export default function AssessmentAnalytics() {
         </Link>
 
         <div className="flex items-center gap-3">
+          <a
+            href={`${API_BASE}/assessment/${id}/export-csv`}
+            download
+            className="flex items-center gap-2 text-xs font-mono font-semibold px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors cursor-pointer"
+            title="Export all student marks, mistakes, and answers to Microsoft Forms CSV format"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Export CSV
+          </a>
           <button
             onClick={fetchData}
             className="btn-secondary flex items-center gap-2 text-xs font-mono px-3.5 py-2"
@@ -217,17 +227,20 @@ export default function AssessmentAnalytics() {
                 <th className="py-3.5 px-4 font-semibold">Roll Number</th>
                 <th className="py-3.5 px-4 font-semibold">Student Details</th>
                 <th className="py-3.5 px-4 font-semibold">Status</th>
-                <th className="py-3.5 px-4 font-semibold">Progress / Answers</th>
+                <th className="py-3.5 px-4 font-semibold">Marks</th>
+                <th className="py-3.5 px-4 font-semibold">Correct (✓)</th>
+                <th className="py-3.5 px-4 font-semibold">Mistakes (✗)</th>
+                <th className="py-3.5 px-4 font-semibold">Unanswered</th>
                 <th className="py-3.5 px-4 font-semibold">Violations</th>
                 <th className="py-3.5 px-4 font-semibold">Duration</th>
-                <th className="py-3.5 px-4 font-semibold">Score</th>
+                <th className="py-3.5 px-4 font-semibold">Score %</th>
                 <th className="py-3.5 px-4 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#0F0F11]/5">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-10 text-xs font-mono text-[#A8A8AE]">
+                  <td colSpan={11} className="text-center py-10 text-xs font-mono text-[#A8A8AE]">
                     {searchTerm ? "No students matching your search query." : "No student attempts recorded yet. Share the exam link with students to start."}
                   </td>
                 </tr>
@@ -252,23 +265,35 @@ export default function AssessmentAnalytics() {
                         {s.status.replace('_', ' ')}
                       </span>
                     </td>
+                    <td className="py-4 px-4 font-mono font-bold text-sm text-indigo-700">
+                      {s.points_earned !== null && s.points_earned !== undefined ? (
+                        <span>{s.points_earned} / {s.total_points}</span>
+                      ) : (
+                        <span className="text-[#A8A8AE] font-normal italic">In Progress</span>
+                      )}
+                    </td>
                     <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-20 bg-gray-200 rounded-full h-2 overflow-hidden">
-                          <div
-                            className="bg-indigo-600 h-full rounded-full transition-all duration-300"
-                            style={{
-                              width: `${s.total_questions > 0 ? (s.answered_count / s.total_questions) * 100 : 0}%`
-                            }}
-                          />
-                        </div>
-                        <span className="font-mono text-xs font-medium text-[#0F0F11]">
-                          {s.answered_count} / {s.total_questions}
+                      {s.correct_count !== null && s.correct_count !== undefined ? (
+                        <span className="inline-flex items-center gap-1 font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          {s.correct_count}
                         </span>
-                      </div>
-                      <span className="text-[10px] text-[#6F6F75] font-mono">
-                        {s.status === 'in_progress' ? 'Updating live' : 'Submitted'}
-                      </span>
+                      ) : (
+                        <span className="text-[#A8A8AE] font-mono">-</span>
+                      )}
+                    </td>
+                    <td className="py-4 px-4">
+                      {s.mistake_count !== null && s.mistake_count !== undefined ? (
+                        <span className="inline-flex items-center gap-1 font-mono text-xs font-bold text-red-700 bg-red-50 px-2.5 py-1 rounded-md border border-red-200">
+                          <XCircle className="w-3.5 h-3.5 text-red-600" />
+                          {s.mistake_count}
+                        </span>
+                      ) : (
+                        <span className="text-[#A8A8AE] font-mono">-</span>
+                      )}
+                    </td>
+                    <td className="py-4 px-4 font-mono text-xs text-[#6F6F75]">
+                      {s.unanswered_count !== null && s.unanswered_count !== undefined ? s.unanswered_count : (s.total_questions - s.answered_count)}
                     </td>
                     <td className="py-4 px-4">
                       <div className="font-mono text-xs">
@@ -353,20 +378,41 @@ export default function AssessmentAnalytics() {
           ) : (
             <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
               {violations.map((v, idx) => (
-                <div key={idx} className="flex justify-between items-center p-3.5 bg-[#FAFAF8] border border-red-100 rounded-xl font-mono text-[11px] leading-relaxed">
+                <div key={idx} className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-3.5 bg-[#FAFAF8] border border-red-100 rounded-xl font-mono text-[11px] leading-relaxed gap-2">
                   <div className="flex items-center gap-3">
-                    <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                    <AlertTriangle className={`w-4 h-4 flex-shrink-0 ${v.event_type === 'phone_detected' ? 'text-amber-500' : 'text-red-500'}`} />
                     <div>
                       <span className="font-semibold text-[#0F0F11]">{v.student_name}</span>
                       <span className="text-[#6F6F75] ml-1">({v.student_email})</span>
-                      <span className="text-red-600 bg-red-50 px-2 py-0.5 border border-red-200 rounded-md ml-2 inline-block font-semibold">
-                        {v.event_type.replace(/_/g, ' ').toUpperCase()}
+                      <span className={`px-2 py-0.5 border rounded-md ml-2 inline-block font-semibold ${
+                        v.event_type === 'phone_detected'
+                          ? 'bg-amber-50 text-amber-800 border-amber-300'
+                          : 'bg-red-50 text-red-600 border-red-200'
+                      }`}>
+                        {v.event_type === 'phone_detected' ? '📱 CELL PHONE DETECTED' : v.event_type.replace(/_/g, ' ').toUpperCase()}
                       </span>
                     </div>
                   </div>
-                  <div className="text-right text-[#6F6F75] space-y-0.5">
-                    <div>{v.browser} • {v.os}</div>
-                    <div className="text-[10px] text-[#A8A8AE]">{new Date(v.timestamp).toLocaleTimeString()}</div>
+                  <div className="flex items-center justify-between sm:justify-end gap-3 text-right text-[#6F6F75]">
+                    {v.snapshot_data && (
+                      <button
+                        onClick={() => setSelectedSnapshot({
+                          image: v.snapshot_data,
+                          student: v.student_name,
+                          email: v.student_email,
+                          time: v.timestamp,
+                          type: v.event_type
+                        })}
+                        className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                        title="View photo evidence captured by webcam"
+                      >
+                        <span>📸 View Evidence Snapshot</span>
+                      </button>
+                    )}
+                    <div className="space-y-0.5">
+                      <div>{v.browser} • {v.os}</div>
+                      <div className="text-[10px] text-[#A8A8AE]">{new Date(v.timestamp).toLocaleTimeString()}</div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -403,24 +449,32 @@ export default function AssessmentAnalytics() {
               </button>
             </div>
 
-            {/* Modal Stats Bar */}
-            <div className="grid grid-cols-4 border-b border-[#0F0F11]/10 bg-white p-4 text-center font-mono text-xs divide-x divide-[#0F0F11]/10">
+            {/* Modal Stats Bar - Microsoft Forms format */}
+            <div className="grid grid-cols-5 border-b border-[#0F0F11]/10 bg-white p-4 text-center font-mono text-xs divide-x divide-[#0F0F11]/10">
               <div>
-                <div className="text-[#A8A8AE] text-[10px] uppercase">Score</div>
-                <div className="text-lg font-bold text-[#0F0F11] mt-0.5">
-                  {selectedStudent.score !== null ? `${selectedStudent.score}%` : 'In Progress'}
+                <div className="text-[#A8A8AE] text-[10px] uppercase">Marks / Total</div>
+                <div className="text-lg font-bold text-indigo-700 mt-0.5">
+                  {selectedStudent.points_earned !== null && selectedStudent.points_earned !== undefined
+                    ? `${selectedStudent.points_earned} / ${selectedStudent.total_points}`
+                    : (selectedStudent.score !== null ? `${selectedStudent.score}%` : 'In Progress')}
                 </div>
               </div>
               <div>
-                <div className="text-[#A8A8AE] text-[10px] uppercase">Questions Answered</div>
-                <div className="text-lg font-bold text-indigo-600 mt-0.5">
-                  {selectedStudent.answered_count} / {selectedStudent.total_questions}
+                <div className="text-[#A8A8AE] text-[10px] uppercase">Correct (✓)</div>
+                <div className="text-lg font-bold text-emerald-600 mt-0.5">
+                  {selectedStudent.correct_count ?? '-'}
                 </div>
               </div>
               <div>
-                <div className="text-[#A8A8AE] text-[10px] uppercase">Violations Logged</div>
-                <div className={`text-lg font-bold mt-0.5 ${selectedStudent.violation_count > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {selectedStudent.violation_count}
+                <div className="text-[#A8A8AE] text-[10px] uppercase">Mistakes (✗)</div>
+                <div className="text-lg font-bold text-red-600 mt-0.5">
+                  {selectedStudent.mistake_count ?? '-'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[#A8A8AE] text-[10px] uppercase">Unanswered</div>
+                <div className="text-lg font-bold text-gray-600 mt-0.5">
+                  {selectedStudent.unanswered_count ?? '-'}
                 </div>
               </div>
               <div>
@@ -451,12 +505,16 @@ export default function AssessmentAnalytics() {
                 let correctAnswer = q.answer || ""
 
                 if (rawResp && typeof rawResp === 'object' && 'answer' in rawResp) {
-                  studentAnswer = rawResp.answer
+                  studentAnswer = rawResp.answer || ""
                   isGraded = true
                   isCorrect = rawResp.correct
                   if (rawResp.correct_answer) correctAnswer = rawResp.correct_answer
-                } else if (rawResp !== undefined) {
-                  studentAnswer = String(rawResp)
+                } else if (rawResp !== undefined && rawResp !== null) {
+                  studentAnswer = String(rawResp).trim()
+                  if (correctAnswer && ['mcq', 'true_false', 'short_answer'].includes(q.type)) {
+                    isGraded = true
+                    isCorrect = studentAnswer.toLowerCase() === correctAnswer.toLowerCase()
+                  }
                 }
 
                 const hasAnswered = studentAnswer && studentAnswer.trim().length > 0
@@ -469,8 +527,8 @@ export default function AssessmentAnalytics() {
                         ? 'bg-gray-50/50 border-gray-200/60'
                         : isGraded
                         ? isCorrect
-                          ? 'bg-green-50/30 border-green-200'
-                          : 'bg-red-50/30 border-red-200'
+                        ? 'bg-green-50/30 border-green-200'
+                        : 'bg-red-50/30 border-red-200'
                         : 'bg-indigo-50/20 border-indigo-100'
                     }`}
                   >
@@ -486,7 +544,7 @@ export default function AssessmentAnalytics() {
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-red-700 bg-red-100/80 px-2 py-0.5 rounded">
-                              <XCircle className="w-3.5 h-3.5" /> Incorrect
+                              <XCircle className="w-3.5 h-3.5" /> Mistake / Incorrect
                             </span>
                           )
                         ) : (
@@ -499,7 +557,17 @@ export default function AssessmentAnalytics() {
                       )}
                     </div>
 
-                    <p className="text-sm font-medium text-[#0F0F11] mb-3">{q.question}</p>
+                    <p className="text-sm font-medium text-[#0F0F11] mb-3 whitespace-pre-line">{q.question}</p>
+
+                    {q.image_url && (
+                      <div className="my-2 flex justify-center">
+                        <img
+                          src={q.image_url}
+                          alt={`Question ${idx + 1} diagram`}
+                          className="max-h-56 max-w-full rounded-lg border border-gray-200 p-1.5 bg-white shadow-2xs object-contain"
+                        />
+                      </div>
+                    )}
 
                     {/* Student's answer display */}
                     <div className="mt-3 pt-3 border-t border-black/5 space-y-2">
@@ -533,6 +601,54 @@ export default function AssessmentAnalytics() {
                 className="btn-primary px-6 py-2 text-xs"
               >
                 Close View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Evidence Snapshot Modal for Teacher Inspection */}
+      {selectedSnapshot && (
+        <div className="fixed inset-0 bg-[#0F0F11]/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#0F0F11]/10 space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-[#0F0F11]/10 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-base">📸</span>
+                <h3 className="font-bold text-[#0F0F11]">Webcam Evidence Snapshot</h3>
+              </div>
+              <button
+                onClick={() => setSelectedSnapshot(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-xl overflow-hidden border-2 border-amber-300 bg-black shadow-inner">
+                <img
+                  src={selectedSnapshot.image}
+                  alt="Webcam detection evidence"
+                  className="w-full object-cover"
+                />
+              </div>
+              <div className="text-xs font-mono text-[#6F6F75] space-y-1 bg-[#FAFAF8] p-3 rounded-xl border border-[#0F0F11]/5">
+                <div><strong>Candidate:</strong> {selectedSnapshot.student} ({selectedSnapshot.email})</div>
+                <div><strong>Detection Type:</strong> {selectedSnapshot.type.replace(/_/g, ' ').toUpperCase()}</div>
+                <div><strong>Captured At:</strong> {new Date(selectedSnapshot.time).toLocaleString()}</div>
+                <div className="text-[11px] text-amber-800 pt-1 font-semibold flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Review frame to verify if the candidate was holding a phone or if this was a false positive.</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => setSelectedSnapshot(null)}
+                className="btn-primary py-2 px-4 text-xs font-semibold"
+              >
+                Close Evidence
               </button>
             </div>
           </div>

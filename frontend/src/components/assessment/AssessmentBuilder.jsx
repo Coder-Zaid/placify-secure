@@ -19,11 +19,11 @@ const DEFAULT_SECURITY_POLICY = {
   detect_dev_tools: true,
   detect_fullscreen_exit: true,
   detect_tab_switch: true,
-  detect_window_blur: true,
+  detect_window_blur: false,
   detect_window_minimize: true,
   detect_extension_removal: true,
-  max_warnings: 1,
-  grace_period_seconds: 2
+  max_warnings: 4,
+  grace_period_seconds: 3
 }
 
 export default function AssessmentBuilder() {
@@ -308,6 +308,7 @@ export default function AssessmentBuilder() {
     const payload = {
       title,
       description,
+      created_by: localStorage.getItem('placify_user_email') || 'admin',
       duration_minutes: durationMinutes,
       passing_score: passingScore,
       max_attempts: maxAttempts,

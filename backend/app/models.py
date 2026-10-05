@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional, Dict
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, Text, JSON
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, Text, JSON, Index
 from sqlalchemy.orm import relationship
 import datetime
 from database import Base
@@ -16,6 +16,7 @@ class QuestionSchema(BaseModel):
     answer: Optional[str] = None
     points: int = 1
     negative_marking: float = 0.0
+    image_url: Optional[str] = None
 
 class SecurityPolicySchema(BaseModel):
     fullscreen_required: bool = True
@@ -31,15 +32,16 @@ class SecurityPolicySchema(BaseModel):
     detect_dev_tools: bool = True
     detect_fullscreen_exit: bool = True
     detect_tab_switch: bool = True
-    detect_window_blur: bool = True
+    detect_window_blur: bool = False
     detect_window_minimize: bool = True
     detect_extension_removal: bool = True
-    max_warnings: int = 1
-    grace_period_seconds: int = 2
+    max_warnings: int = 4
+    grace_period_seconds: int = 3
 
 class CreateAssessmentRequest(BaseModel):
     title: str
     description: str = ""
+    created_by: Optional[str] = "admin"
     duration_minutes: int = 30
     passing_score: int = 50
     max_attempts: int = 1
@@ -74,11 +76,21 @@ class SubmitAttemptRequest(BaseModel):
 
 class ViolationEventRequest(BaseModel):
     attempt_id: str
-    event_type: str  # tab_switch, fullscreen_exit, window_blur, dev_tools, extension_removed, etc.
+    event_type: str  # tab_switch, fullscreen_exit, window_blur, dev_tools, extension_removed, phone_detected, etc.
     duration_seconds: float = 0.0
     browser: str = ""
     os: str = ""
     fullscreen_status: bool = True
+    snapshot_data: Optional[str] = None
+
+class InstructorRegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class InstructorLoginRequest(BaseModel):
+    email: str
+    password: str
 
 
 # ============================================================================
@@ -98,6 +110,7 @@ class DBAssessment(Base):
     shuffle_options = Column(Boolean, default=False)
     status = Column(String, default="draft")  # draft, published, closed
     access_code = Column(String, unique=True, index=True, nullable=True)
+    created_by = Column(String, default="admin", nullable=True)  # Instructor email or admin
     security_policy = Column(JSON, default=dict)
     questions = Column(JSON, default=list)  # List of question dicts
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -108,14 +121,20 @@ class DBAssessment(Base):
 
 class DBStudentAttempt(Base):
     __tablename__ = "student_attempts"
+    __table_args__ = (
+        # Hot-path index: duplicate attempt check on start
+        Index('ix_attempts_assessment_email', 'assessment_id', 'student_email'),
+        # Hot-path index: analytics/monitor queries filter by status
+        Index('ix_attempts_assessment_status', 'assessment_id', 'status'),
+    )
     
     id = Column(Integer, primary_key=True, index=True)
     attempt_id = Column(String, unique=True, index=True, nullable=False)
-    assessment_id = Column(Integer, ForeignKey("assessments.id"))
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), index=True)
     student_name = Column(String, nullable=False)
-    student_email = Column(String, nullable=False)
+    student_email = Column(String, nullable=False, index=True)
     roll_number = Column(String, default="", nullable=True)
-    status = Column(String, default="in_progress")  # in_progress, completed, terminated
+    status = Column(String, default="in_progress", index=True)  # in_progress, completed, terminated
     start_time = Column(DateTime, default=datetime.datetime.utcnow)
     end_time = Column(DateTime, nullable=True)
     score = Column(Float, nullable=True)
@@ -130,14 +149,33 @@ class DBStudentAttempt(Base):
 
 class DBViolationLog(Base):
     __tablename__ = "violation_logs"
+    __table_args__ = (
+        # Hot-path index: fetch violations by attempt
+        Index('ix_violations_attempt_id', 'attempt_id'),
+        # Index for filtering by event type (phone_detected queries)
+        Index('ix_violations_attempt_event', 'attempt_id', 'event_type'),
+    )
     
     id = Column(Integer, primary_key=True, index=True)
-    attempt_id = Column(String, ForeignKey("student_attempts.attempt_id"))
-    event_type = Column(String, nullable=False)
+    attempt_id = Column(String, ForeignKey("student_attempts.attempt_id"), index=True)
+    event_type = Column(String, nullable=False, index=True)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     duration_seconds = Column(Float, default=0.0)
     browser = Column(String, default="")
     os = Column(String, default="")
     fullscreen_status = Column(Boolean, default=True)
+    snapshot_data = Column(Text, nullable=True)  # Base64 camera evidence
     
     attempt = relationship("DBStudentAttempt", back_populates="violations")
+
+
+class DBInstructor(Base):
+    __tablename__ = "instructors"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, default="instructor")  # "admin" or "instructor"
+    is_approved = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
