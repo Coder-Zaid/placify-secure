@@ -287,12 +287,14 @@ async def create_assessment(request: CreateAssessmentRequest, db: Session = Depe
 async def list_assessments(
     created_by: str = None,
     role: str = None,
+    filter_mine: bool = False,
     db: Session = Depends(get_db)
 ):
     try:
         query = db.query(DBAssessment)
-        # Multi-tenancy isolation: unless master admin, only show tests authored by this instructor
-        if role != "admin" and created_by:
+        # Institutional proctoring: all approved faculty and admins see the full assessment list.
+        # Only isolate by author if explicitly requested with filter_mine=True.
+        if filter_mine and created_by:
             query = query.filter(DBAssessment.created_by == created_by)
             
         assessments = query.order_by(DBAssessment.created_at.desc()).all()

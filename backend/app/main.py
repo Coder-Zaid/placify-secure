@@ -22,19 +22,29 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-from database import engine, Base
+from database import engine, Base, SessionLocal
 from routes import assessment, auth
 from cache import response_cache
+from seed import seed_database_if_empty
 
 
 # ---------------------------------------------------------------------------
-# Application Lifespan — start/stop the response cache flush loop
+# Application Lifespan — start/stop response cache and ensure db seeding
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     await response_cache.start()
     logger.info("Placify Secure API started — response cache active")
+    
+    # Auto-seed essential university assessments and approved faculty if missing
+    try:
+        db = SessionLocal()
+        seed_database_if_empty(db)
+        db.close()
+    except Exception as seed_err:
+        logger.error(f"Startup seed error: {seed_err}")
+        
     yield
     # Shutdown
     await response_cache.stop()
