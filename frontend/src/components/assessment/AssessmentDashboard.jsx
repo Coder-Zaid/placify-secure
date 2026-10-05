@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { 
   Plus, BarChart2, ShieldAlert, Clock, Copy, Check, Power, AlertTriangle, 
-  Eye, Trash2, LogOut, Users, UserCheck, UserX, ShieldCheck, Mail, Download
+  Eye, Trash2, LogOut, Users, UserCheck, UserX, ShieldCheck, Mail, Download,
+  Upload, Database
 } from 'lucide-react'
 import axios from 'axios'
 
@@ -133,6 +134,42 @@ export default function AssessmentDashboard() {
     setTimeout(() => setCopiedCode(null), 2000)
   }
 
+  const handleDownloadBackup = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/assessment/admin/backup-all`)
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `placify_backup_${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert("Failed to export database backup: " + (e.response?.data?.detail || e.message))
+    }
+  }
+
+  const handleRestoreBackup = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const reader = new FileReader()
+      reader.onload = async (evt) => {
+        try {
+          const parsed = JSON.parse(evt.target.result)
+          const res = await axios.post(`${API_BASE}/assessment/admin/restore-all`, parsed)
+          alert(`Backup restored successfully!\n- Assessments restored: ${res.data.restored_assessments}\n- Student attempts restored: ${res.data.restored_attempts}`)
+          fetchAssessments()
+        } catch (parseErr) {
+          alert("Invalid backup file: " + parseErr.message)
+        }
+      }
+      reader.readAsText(file)
+    } catch (err) {
+      alert("Failed to read file: " + err.message)
+    }
+  }
+
   const pendingInstructors = instructors.filter(i => !i.is_approved)
   const approvedInstructors = instructors.filter(i => i.is_approved)
 
@@ -179,6 +216,24 @@ export default function AssessmentDashboard() {
             <span>Sign Out</span>
           </button>
           
+          <button
+            onClick={handleDownloadBackup}
+            className="btn-secondary flex items-center gap-1.5 text-xs text-[#4E4E54] hover:text-[#0F0F11] border-[#0F0F11]/10 py-2.5 px-3.5 cursor-pointer"
+            title="Download full backup of all tests, student attempts, and scores as JSON"
+          >
+            <Download className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="hidden sm:inline">Backup</span>
+          </button>
+
+          <label
+            className="btn-secondary flex items-center gap-1.5 text-xs text-[#4E4E54] hover:text-[#0F0F11] border-[#0F0F11]/10 py-2.5 px-3.5 cursor-pointer"
+            title="Restore database from a saved JSON backup file"
+          >
+            <Upload className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="hidden sm:inline">Restore</span>
+            <input type="file" accept=".json" onChange={handleRestoreBackup} className="hidden" />
+          </label>
+
           <Link to="/assessments/new" className="btn-primary flex items-center gap-2">
             <Plus className="w-4 h-4" />
             Create Assessment

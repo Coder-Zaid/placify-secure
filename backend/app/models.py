@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, Text, JSON, Index
 from sqlalchemy.orm import relationship
 import datetime
@@ -35,6 +35,7 @@ class SecurityPolicySchema(BaseModel):
     detect_window_blur: bool = False
     detect_window_minimize: bool = True
     detect_extension_removal: bool = True
+    detect_phone: bool = False
     max_warnings: int = 4
     grace_period_seconds: int = 3
 
@@ -73,6 +74,19 @@ class SyncResponsesRequest(BaseModel):
 class SubmitAttemptRequest(BaseModel):
     attempt_id: str
     responses: Dict[str, str]  # question_index -> answer
+
+class RecoverAttemptRequest(BaseModel):
+    attempt_id: str
+    student_name: str
+    student_email: str
+    roll_number: Optional[str] = ""
+    score: Optional[float] = None
+    status: Optional[str] = "completed"
+    responses: Optional[Dict[str, Any]] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    warning_count: Optional[int] = 0
+    violation_count: Optional[int] = 0
 
 class ViolationEventRequest(BaseModel):
     attempt_id: str

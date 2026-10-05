@@ -1,9 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 import datetime
 import uuid
 import random
 import string
+import os
+import json
 
 from database import get_db
 from cache import response_cache
@@ -11,7 +14,7 @@ from models import (
     DBAssessment, DBStudentAttempt, DBViolationLog,
     CreateAssessmentRequest, UpdateAssessmentRequest,
     StartAttemptRequest, SubmitAttemptRequest, ViolationEventRequest,
-    SyncResponsesRequest, SecurityPolicySchema
+    SyncResponsesRequest, SecurityPolicySchema, RecoverAttemptRequest
 )
 from seed import QUESTIONS_SET_D, POLICY_SET_D, QUESTIONS_DAA_INTERNAL_II, POLICY_DAA
 
@@ -558,10 +561,35 @@ async def start_attempt(assessment_id: int, request: StartAttemptRequest, db: Se
         DBStudentAttempt.assessment_id == assessment_id,
         DBStudentAttempt.student_email == request.student_email,
         DBStudentAttempt.status.in_(["completed", "terminated"])
-    ).count()
+    ).order_by(DBStudentAttempt.start_time.desc()).all()
     
-    if finished_attempts >= assessment.max_attempts:
-        raise HTTPException(status_code=400, detail="Maximum number of attempts reached for this assessment")
+    if len(finished_attempts) >= assessment.max_attempts:
+        last = finished_attempts[0]
+        questions = assessment.questions or []
+        total_points = sum(q.get("points", 1) for q in questions)
+        has_answer_keys = any(bool(q.get("answer", "").strip()) for q in questions if q.get("type") in ["mcq", "true_false", "short_answer"])
+        percentage = last.score if last.score is not None else 0.0
+        passed = (percentage >= assessment.passing_score) if assessment else False
+        points_earned = round(percentage / 100.0 * total_points, 1) if (has_answer_keys and total_points) else None
+
+        return {
+            "already_completed": True,
+            "attempt_id": last.attempt_id,
+            "status": last.status,
+            "has_answer_keys": has_answer_keys,
+            "score": round(percentage, 1) if has_answer_keys else None,
+            "points_earned": points_earned,
+            "total_points": total_points,
+            "passed": passed if has_answer_keys else None,
+            "passing_score": assessment.passing_score if assessment else 0,
+            "correct_count": len([r for r in (last.responses or {}).values() if isinstance(r, dict) and r.get("correct")]),
+            "total_questions": len(questions),
+            "answered_count": len([a for a in (last.responses or {}).values() if a and (str(a).strip() if not isinstance(a, dict) else str(a.get("answer", "")).strip())]),
+            "completion_time": (last.end_time - last.start_time).total_seconds() if (last.end_time and last.start_time) else 0,
+            "warning_count": last.warning_count,
+            "violation_count": last.violation_count,
+            "detail": "Maximum attempts reached. Displaying your previously submitted score."
+        }
     
     try:
         attempt_id = str(uuid.uuid4())[:12]
@@ -736,6 +764,33 @@ async def submit_attempt(assessment_id: int, request: SubmitAttemptRequest, db: 
         
         db.commit()
         db.refresh(attempt)
+
+        # Write to persistent attempt backup JSON file on disk
+        try:
+            backup_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "attempts_backup.json")
+            existing_backups = []
+            if os.path.exists(backup_path):
+                with open(backup_path, "r", encoding="utf-8") as bf:
+                    existing_backups = json.load(bf)
+            existing_backups = [b for b in existing_backups if b.get("attempt_id") != attempt.attempt_id]
+            existing_backups.append({
+                "attempt_id": attempt.attempt_id,
+                "assessment_id": assessment.id,
+                "student_name": attempt.student_name,
+                "student_email": attempt.student_email,
+                "roll_number": attempt.roll_number,
+                "status": attempt.status,
+                "score": attempt.score,
+                "responses": attempt.responses,
+                "start_time": attempt.start_time.isoformat() if attempt.start_time else None,
+                "end_time": attempt.end_time.isoformat() if attempt.end_time else None,
+                "warning_count": attempt.warning_count,
+                "violation_count": attempt.violation_count
+            })
+            with open(backup_path, "w", encoding="utf-8") as bf:
+                json.dump(existing_backups, bf, indent=2)
+        except Exception as b_err:
+            pass
         
         answered_count = len([a for a in responses_to_grade.values() if a and str(a).strip()])
         
@@ -1237,4 +1292,165 @@ async def export_assessment_csv(assessment_id: int, db: Session = Depends(get_db
             "Access-Control-Expose-Headers": "Content-Disposition"
         }
     )
+
+
+# ============================================================================
+# DATA RECOVERY & PERSISTENCE PROTECTION
+# ============================================================================
+
+@router.post("/{assessment_id}/recover-attempt")
+async def recover_attempt(assessment_id: int, request: RecoverAttemptRequest, db: Session = Depends(get_db)):
+    """
+    Candidate & Instructor Data Recovery:
+    Restores completed attempt records from browser localStorage receipts
+    in case the server container restarted or ephemeral database was flushed.
+    """
+    existing = db.query(DBStudentAttempt).filter(
+        DBStudentAttempt.attempt_id == request.attempt_id
+    ).first()
+    
+    if existing:
+        return {"restored": False, "exists": True, "attempt_id": existing.attempt_id, "score": existing.score}
+    
+    assessment = db.query(DBAssessment).filter(DBAssessment.id == assessment_id).first()
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    
+    try:
+        new_attempt = DBStudentAttempt(
+            attempt_id=request.attempt_id,
+            assessment_id=assessment_id,
+            student_name=request.student_name,
+            student_email=request.student_email,
+            roll_number=request.roll_number or "",
+            status=request.status or "completed",
+            score=request.score,
+            responses=request.responses or {},
+            start_time=datetime.datetime.fromisoformat(request.start_time) if request.start_time else datetime.datetime.utcnow(),
+            end_time=datetime.datetime.fromisoformat(request.end_time) if request.end_time else datetime.datetime.utcnow(),
+            warning_count=request.warning_count or 0,
+            violation_count=request.violation_count or 0
+        )
+        db.add(new_attempt)
+        db.commit()
+        db.refresh(new_attempt)
+        return {"restored": True, "attempt_id": new_attempt.attempt_id, "score": new_attempt.score}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to recover attempt: {str(e)}")
+
+
+@router.get("/admin/backup-all")
+async def export_full_database_backup(db: Session = Depends(get_db)):
+    """
+    Exports a complete JSON snapshot of all assessments and student attempts
+    to allow 1-click disaster recovery.
+    """
+    assessments = db.query(DBAssessment).all()
+    attempts = db.query(DBStudentAttempt).all()
+    
+    backup_data = {
+        "export_date": datetime.datetime.utcnow().isoformat(),
+        "assessments": [
+            {
+                "id": a.id,
+                "title": a.title,
+                "description": a.description,
+                "duration_minutes": a.duration_minutes,
+                "passing_score": a.passing_score,
+                "max_attempts": a.max_attempts,
+                "status": a.status,
+                "access_code": a.access_code,
+                "created_by": a.created_by,
+                "security_policy": a.security_policy,
+                "questions": a.questions,
+                "created_at": a.created_at.isoformat() if a.created_at else None
+            } for a in assessments
+        ],
+        "attempts": [
+            {
+                "attempt_id": at.attempt_id,
+                "assessment_id": at.assessment_id,
+                "student_name": at.student_name,
+                "student_email": at.student_email,
+                "roll_number": at.roll_number,
+                "status": at.status,
+                "score": at.score,
+                "responses": at.responses,
+                "warning_count": at.warning_count,
+                "violation_count": at.violation_count,
+                "start_time": at.start_time.isoformat() if at.start_time else None,
+                "end_time": at.end_time.isoformat() if at.end_time else None
+            } for at in attempts
+        ]
+    }
+    
+    return backup_data
+
+
+@router.post("/admin/restore-all")
+async def import_full_database_backup(backup_data: dict, db: Session = Depends(get_db)):
+    """
+    Restores assessments and attempts from a JSON snapshot.
+    """
+    restored_assessments = 0
+    restored_attempts = 0
+    
+    try:
+        # 1. Restore Assessments
+        for a_data in backup_data.get("assessments", []):
+            existing = db.query(DBAssessment).filter(DBAssessment.id == a_data["id"]).first()
+            if not existing and a_data.get("access_code"):
+                existing = db.query(DBAssessment).filter(DBAssessment.access_code == a_data["access_code"]).first()
+            
+            if not existing:
+                new_a = DBAssessment(
+                    id=a_data["id"],
+                    title=a_data["title"],
+                    description=a_data.get("description", ""),
+                    duration_minutes=a_data.get("duration_minutes", 30),
+                    passing_score=a_data.get("passing_score", 50),
+                    max_attempts=a_data.get("max_attempts", 1),
+                    status=a_data.get("status", "published"),
+                    access_code=a_data.get("access_code"),
+                    created_by=a_data.get("created_by", "admin"),
+                    security_policy=a_data.get("security_policy", {}),
+                    questions=a_data.get("questions", []),
+                    created_at=datetime.datetime.fromisoformat(a_data["created_at"]) if a_data.get("created_at") else datetime.datetime.utcnow()
+                )
+                db.add(new_a)
+                restored_assessments += 1
+        db.commit()
+        
+        # 2. Restore Attempts
+        for at_data in backup_data.get("attempts", []):
+            existing_at = db.query(DBStudentAttempt).filter(DBStudentAttempt.attempt_id == at_data["attempt_id"]).first()
+            if not existing_at:
+                new_at = DBStudentAttempt(
+                    attempt_id=at_data["attempt_id"],
+                    assessment_id=at_data["assessment_id"],
+                    student_name=at_data["student_name"],
+                    student_email=at_data["student_email"],
+                    roll_number=at_data.get("roll_number", ""),
+                    status=at_data.get("status", "completed"),
+                    score=at_data.get("score"),
+                    responses=at_data.get("responses", {}),
+                    warning_count=at_data.get("warning_count", 0),
+                    violation_count=at_data.get("violation_count", 0),
+                    start_time=datetime.datetime.fromisoformat(at_data["start_time"]) if at_data.get("start_time") else datetime.datetime.utcnow(),
+                    end_time=datetime.datetime.fromisoformat(at_data["end_time"]) if at_data.get("end_time") else datetime.datetime.utcnow()
+                )
+                db.add(new_at)
+                restored_attempts += 1
+        db.commit()
+        
+        return {
+            "success": True,
+            "restored_assessments": restored_assessments,
+            "restored_attempts": restored_attempts
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to restore backup: {str(e)}")
+
 

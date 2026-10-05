@@ -42,7 +42,8 @@ export default function StudentPortal() {
     cameraActive,
     attemptId,
     assessmentId: assessmentInfo?.id,
-    examStarted
+    examStarted,
+    enabled: assessmentInfo?.security_policy?.detect_phone === true
   })
 
   const [submitting, setSubmitting] = useState(false)
@@ -209,6 +210,20 @@ export default function StudentPortal() {
     try {
       const res = await axios.get(`${API_BASE}/assessment/join/${accessCode}`)
       setAssessmentInfo(res.data)
+
+      // Restore previously completed receipt on this device if exists
+      if (res.data?.id) {
+        const cachedReceipt = localStorage.getItem(`placify_last_receipt_${res.data.id}`)
+        if (cachedReceipt) {
+          try {
+            const parsed = JSON.parse(cachedReceipt)
+            if (parsed && parsed.status === 'completed') {
+              setExamResult(parsed)
+              setExamCompleted(true)
+            }
+          } catch (e) {}
+        }
+      }
     } catch (err) {
       console.error("Error fetching assessment details:", err)
       setErrorInfo(err.response?.data?.detail || "Invalid access code. Please verify the URL.")
@@ -288,6 +303,25 @@ export default function StudentPortal() {
       })
 
       const data = res.data
+
+      // If backend reports candidate already completed this assessment, show results directly
+      if (data.already_completed) {
+        setExamResult({
+          attempt_id: data.attempt_id,
+          score: data.score,
+          points_earned: data.points_earned,
+          total_points: data.total_points,
+          correct_count: data.correct_count,
+          mistake_count: data.mistake_count,
+          total_questions: data.total_questions,
+          passed: data.passed,
+          status: data.status,
+          already_submitted: true
+        })
+        setExamCompleted(true)
+        return
+      }
+
       setAttemptId(data.attempt_id)
       setQuestions(data.questions || [])
       
@@ -316,6 +350,16 @@ export default function StudentPortal() {
       }, 500)
     } catch (err) {
       console.error("Error starting attempt:", err)
+      // Check local storage receipt before alerting
+      const localReceipt = localStorage.getItem(`placify_receipt_${assessmentInfo.id}_${studentEmail.trim().toLowerCase()}`)
+      if (localReceipt) {
+        try {
+          const parsed = JSON.parse(localReceipt)
+          setExamResult(parsed)
+          setExamCompleted(true)
+          return
+        } catch (e) {}
+      }
       alert(err.response?.data?.detail || "Failed to start assessment. Attempt count might be exceeded.")
     }
   }
@@ -452,19 +496,66 @@ export default function StudentPortal() {
           responses: finalResponses
         }, { timeout: 15000 })
         
-        setExamResult(res.data)
+        const resultData = res.data
+        setExamResult(resultData)
         setExamCompleted(true)
         setExamTerminated(false)
         success = true
+
+        // Persist immutable student receipt to localStorage so refreshing never loses score
+        try {
+          const receipt = {
+            attempt_id: attemptId,
+            assessment_id: assessmentInfo.id,
+            assessment_title: assessmentInfo.title,
+            student_name: studentName,
+            student_email: studentEmail,
+            roll_number: rollNumber,
+            score: resultData.score,
+            points_earned: resultData.points_earned,
+            total_points: resultData.total_points,
+            passed: resultData.passed,
+            correct_count: resultData.correct_count,
+            mistake_count: resultData.mistake_count,
+            total_questions: resultData.total_questions || questions.length,
+            answered_count: resultData.answered_count,
+            submitted_at: new Date().toISOString(),
+            status: "completed"
+          }
+          localStorage.setItem(`placify_receipt_${assessmentInfo.id}_${studentEmail.trim().toLowerCase()}`, JSON.stringify(receipt))
+          localStorage.setItem(`placify_last_receipt_${assessmentInfo.id}`, JSON.stringify(receipt))
+        } catch (receiptErr) {
+          console.warn("Could not save persistent receipt:", receiptErr)
+        }
+
         try { localStorage.removeItem(`placify_exam_responses_${attemptId}`) } catch (e) {}
       } catch (err) {
         retries--
         console.warn(`Submission attempt failed. Retries remaining: ${retries}`, err)
         if (err.response?.data?.attempt_id || err.response?.data?.status) {
-          setExamResult(err.response.data)
+          const resultData = err.response.data
+          setExamResult(resultData)
           setExamCompleted(true)
           setExamTerminated(false)
           success = true
+          try {
+            const receipt = {
+              attempt_id: attemptId,
+              assessment_id: assessmentInfo.id,
+              assessment_title: assessmentInfo.title,
+              student_name: studentName,
+              student_email: studentEmail,
+              roll_number: rollNumber,
+              score: resultData.score,
+              points_earned: resultData.points_earned,
+              total_points: resultData.total_points,
+              passed: resultData.passed,
+              submitted_at: new Date().toISOString(),
+              status: "completed"
+            }
+            localStorage.setItem(`placify_receipt_${assessmentInfo.id}_${studentEmail.trim().toLowerCase()}`, JSON.stringify(receipt))
+            localStorage.setItem(`placify_last_receipt_${assessmentInfo.id}`, JSON.stringify(receipt))
+          } catch (e) {}
           break
         }
         if (retries > 0) {
@@ -858,7 +949,7 @@ export default function StudentPortal() {
     <div
       ref={examContainerRef}
       className={`fixed inset-0 bg-[#FAF7F0] z-50 overflow-y-auto select-none relative transition-all duration-200 ${
-        phoneDetected ? 'blur-md filter pointer-events-none opacity-80' : ''
+        phoneDetected ? 'opacity-95' : ''
       }`}
     >
       {/* 1. AGGRESSIVE FULL-SCREEN ANTI-AI PROMPT INJECTION MESH (Covering Entire Background & Margins) */}
@@ -929,7 +1020,7 @@ export default function StudentPortal() {
 
         {/* Question Panel */}
         <div className={`flex flex-col space-y-6 items-center w-full transition-all duration-300 ${
-          phoneDetected ? 'filter blur-2xl opacity-20 pointer-events-none select-none' : ''
+          phoneDetected ? 'ring-2 ring-red-400/50 rounded-xl' : ''
         }`}>
           
           {/* Question Workspace Content with Multi-Layer Optical Camera & Rolling-Shutter Protection */}
@@ -1031,21 +1122,21 @@ export default function StudentPortal() {
         </div>
       )}
 
-      {/* 🚨 Real-Time Optical Camera Detection Blackout Overlay */}
+      {/* 🚨 Real-Time Optical Camera Detection Alert (Non-blocking) */}
       {phoneDetected && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-50 flex flex-col items-center justify-center p-6 text-center select-none">
-          <div className="w-20 h-20 bg-red-950/80 rounded-2xl flex items-center justify-center border-2 border-red-500 shadow-2xl shadow-red-500/30 animate-pulse mb-6">
-            <AlertTriangle className="w-10 h-10 text-red-500" />
-          </div>
-          <h2 className="text-2xl font-mono font-bold text-white tracking-wider mb-3">
-            🚨 OPTICAL CAPTURE DEVICE DETECTED
-          </h2>
-          <p className="text-sm font-mono text-red-200 max-w-lg leading-relaxed mb-6 bg-red-950/40 p-4 rounded-xl border border-red-800/60">
-            A smartphone or optical camera was detected in your workstation environment. The assessment display has been locked to prevent unauthorized capture.
-          </p>
-          <div className="flex items-center gap-3 px-5 py-2.5 bg-red-900/40 border border-red-500/50 rounded-full text-xs font-mono text-red-100">
-            <span className="w-2 h-2 rounded-full bg-red-400 animate-ping"></span>
-            <span>Lower device out of camera view to restore assessment workspace</span>
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 max-w-lg w-full px-4 animate-in fade-in slide-in-from-top-4 duration-300 pointer-events-none">
+          <div className="bg-red-950/95 text-white p-4 rounded-2xl shadow-2xl border-2 border-red-500 flex items-center gap-3 backdrop-blur-md">
+            <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-6 h-6 text-white" />
+            </div>
+            <div className="text-left">
+              <div className="text-xs font-mono font-bold tracking-wider text-red-300 uppercase">
+                Device Warning: Phone In View
+              </div>
+              <div className="text-xs text-red-100 font-sans mt-0.5 leading-snug">
+                A smartphone was detected in camera view. Please keep all mobile devices away. Proctor evidence snapshot logged.
+              </div>
+            </div>
           </div>
         </div>
       )}

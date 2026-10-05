@@ -41,6 +41,35 @@ async def lifespan(app: FastAPI):
     try:
         db = SessionLocal()
         seed_database_if_empty(db)
+
+        # Auto-restore from attempts_backup.json if present
+        backup_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "attempts_backup.json")
+        if os.path.exists(backup_file):
+            import json
+            import datetime
+            from models import DBStudentAttempt
+            with open(backup_file, "r", encoding="utf-8") as bf:
+                backups = json.load(bf)
+            for at_data in backups:
+                if not db.query(DBStudentAttempt).filter(DBStudentAttempt.attempt_id == at_data.get("attempt_id")).first():
+                    new_at = DBStudentAttempt(
+                        attempt_id=at_data["attempt_id"],
+                        assessment_id=at_data["assessment_id"],
+                        student_name=at_data.get("student_name", "Student"),
+                        student_email=at_data.get("student_email", ""),
+                        roll_number=at_data.get("roll_number", ""),
+                        status=at_data.get("status", "completed"),
+                        score=at_data.get("score"),
+                        responses=at_data.get("responses", {}),
+                        warning_count=at_data.get("warning_count", 0),
+                        violation_count=at_data.get("violation_count", 0),
+                        start_time=datetime.datetime.fromisoformat(at_data["start_time"]) if at_data.get("start_time") else datetime.datetime.utcnow(),
+                        end_time=datetime.datetime.fromisoformat(at_data["end_time"]) if at_data.get("end_time") else datetime.datetime.utcnow()
+                    )
+                    db.add(new_at)
+            db.commit()
+            logger.info("Restored attempts from attempts_backup.json")
+
         db.close()
     except Exception as seed_err:
         logger.error(f"Startup seed error: {seed_err}")

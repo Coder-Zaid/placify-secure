@@ -15,17 +15,24 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001';
  * 3. Silently sends snapshot to the backend warning log (no disruptive alert to candidate).
  * 4. Displays evidence snapshot on the instructor analytics dashboard.
  */
-export function usePhoneDetector({ videoRef, cameraActive, attemptId, assessmentId, examStarted }) {
+export function usePhoneDetector({ videoRef, cameraActive, attemptId, assessmentId, examStarted, enabled = false }) {
   const [modelLoaded, setModelLoaded] = useState(false)
   const [phoneDetected, setPhoneDetected] = useState(false)
   const [lastDetectionTime, setLastDetectionTime] = useState(0)
   const modelRef = useRef(null)
   const isDetectingRef = useRef(false)
   const lastLoggedTimeRef = useRef(0)
+  const consecutiveHitsRef = useRef(0)
 
-  // 1. Dynamically load TensorFlow.js and COCO-SSD scripts
+  // 1. Dynamically load TensorFlow.js and COCO-SSD scripts ONLY if phone detection is enabled
   useEffect(() => {
     let isMounted = true
+
+    if (!enabled) {
+      setModelLoaded(false)
+      setPhoneDetected(false)
+      return
+    }
 
     const loadScriptsAndModel = async () => {
       try {
@@ -69,11 +76,11 @@ export function usePhoneDetector({ videoRef, cameraActive, attemptId, assessment
     return () => {
       isMounted = false
     }
-  }, [examStarted, cameraActive])
+  }, [examStarted, cameraActive, enabled])
 
-  // 2. Continuous high-frequency detection loop with angle sensitivity
+  // 2. Continuous detection loop with strict filtering and multi-frame temporal confirmation
   useEffect(() => {
-    if (!examStarted || !cameraActive || !modelLoaded || !videoRef.current) return
+    if (!enabled || !examStarted || !cameraActive || !modelLoaded || !videoRef.current) return
 
     let clearPhoneTimeout = null
 
@@ -87,69 +94,77 @@ export function usePhoneDetector({ videoRef, cameraActive, attemptId, assessment
         isDetectingRef.current = true
         const predictions = await modelRef.current.detect(video)
 
-        // Sensitive multi-angle device detection:
-        // When a phone is angled, tilted, or partially cropped, COCO-SSD confidence is often 0.25 - 0.40.
-        // We detect 'cell phone', 'remote', and handheld electronic objects.
-        const phonePrediction = predictions.find(
-          p => (
-            (p.class === 'cell phone' && p.score >= 0.25) ||
-            (p.class === 'remote' && p.score >= 0.28) ||
-            ((p.class === 'laptop' || p.class === 'mouse') && p.score >= 0.40 && p.bbox[1] > (video.videoHeight || 240) * 0.4)
-          )
-        )
+        // Strict cell phone detection:
+        // 1. Must be strictly 'cell phone' (NEVER laptop, mouse, or remote which caused classroom false positives)
+        // 2. High confidence threshold >= 0.70 (ignores shadows, classroom lighting glare, and reflections)
+        // 3. Minimum bounding box size (ignores distant background specks)
+        const phonePrediction = predictions.find(p => {
+          if (p.class !== 'cell phone' || p.score < 0.70) return false
+          const bbox = p.bbox || []
+          const width = bbox[2] || 0
+          const height = bbox[3] || 0
+          return width >= 30 && height >= 40
+        })
 
         if (phonePrediction) {
-          console.warn('[AI Proctor] Cell phone / angled capture device detected:', phonePrediction)
-          setPhoneDetected(true)
-          setLastDetectionTime(Date.now())
+          consecutiveHitsRef.current += 1
+          
+          // Require at least 3 consecutive frames (~1.5s persistent presence) to confirm a phone
+          if (consecutiveHitsRef.current >= 3) {
+            console.warn('[AI Proctor] Confirmed phone detected:', phonePrediction)
+            setPhoneDetected(true)
+            setLastDetectionTime(Date.now())
 
-          // Keep screen obscured while device is present + 3.5 seconds grace
-          if (clearPhoneTimeout) clearTimeout(clearPhoneTimeout)
-          clearPhoneTimeout = setTimeout(() => {
-            setPhoneDetected(false)
-          }, 3500)
+            if (clearPhoneTimeout) clearTimeout(clearPhoneTimeout)
+            clearPhoneTimeout = setTimeout(() => {
+              setPhoneDetected(false)
+            }, 1500)
 
-          // Capture evidence snapshot from webcam video (throttled)
-          const now = Date.now()
-          if (now - lastLoggedTimeRef.current > 7000) {
-            lastLoggedTimeRef.current = now
+            // Capture evidence snapshot for instructor review (throttled to 1 per 10s)
+            const now = Date.now()
+            if (now - lastLoggedTimeRef.current > 10000) {
+              lastLoggedTimeRef.current = now
 
-            try {
-              const canvas = document.createElement('canvas')
-              canvas.width = video.videoWidth || 320
-              canvas.height = video.videoHeight || 240
-              const ctx = canvas.getContext('2d')
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-              const snapshotBase64 = canvas.toDataURL('image/jpeg', 0.65)
+              try {
+                const canvas = document.createElement('canvas')
+                canvas.width = video.videoWidth || 320
+                canvas.height = video.videoHeight || 240
+                const ctx = canvas.getContext('2d')
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+                const snapshotBase64 = canvas.toDataURL('image/jpeg', 0.65)
 
-              if (attemptId && assessmentId) {
-                axios.post(`${API_BASE}/assessment/${assessmentId}/violations`, {
-                  attempt_id: attemptId,
-                  event_type: 'phone_detected',
-                  duration_seconds: 0.0,
-                  browser: navigator.userAgent,
-                  os: navigator.platform,
-                  fullscreen_status: !!document.fullscreenElement,
-                  snapshot_data: snapshotBase64
-                }).catch(e => console.error('[AI Proctor] Failed to send violation:', e))
+                if (attemptId && assessmentId) {
+                  axios.post(`${API_BASE}/assessment/${assessmentId}/violations`, {
+                    attempt_id: attemptId,
+                    event_type: 'phone_detected',
+                    duration_seconds: 0.0,
+                    browser: navigator.userAgent,
+                    os: navigator.platform,
+                    fullscreen_status: !!document.fullscreenElement,
+                    snapshot_data: snapshotBase64
+                  }).catch(e => console.error('[AI Proctor] Failed to send violation:', e))
+                }
+              } catch (snapErr) {
+                console.error('[AI Proctor] Failed to capture snapshot:', snapErr)
               }
-            } catch (snapErr) {
-              console.error('[AI Proctor] Failed to capture snapshot:', snapErr)
             }
           }
+        } else {
+          // If no phone detected in this frame, reset consecutive hits counter
+          consecutiveHitsRef.current = 0
         }
       } catch (detectErr) {
-        // Ignore frame error
+        // Ignore single frame error
       } finally {
         isDetectingRef.current = false
       }
-    }, 450) // High-frequency 450ms polling to stop quick camera snaps
+    }, 500)
 
     return () => {
       clearInterval(interval)
       if (clearPhoneTimeout) clearTimeout(clearPhoneTimeout)
     }
-  }, [examStarted, cameraActive, modelLoaded, attemptId, assessmentId, videoRef])
+  }, [enabled, examStarted, cameraActive, modelLoaded, attemptId, assessmentId, videoRef])
 
   return {
     modelLoaded,

@@ -22,6 +22,7 @@ const DEFAULT_SECURITY_POLICY = {
   detect_window_blur: false,
   detect_window_minimize: true,
   detect_extension_removal: true,
+  detect_phone: false,
   max_warnings: 4,
   grace_period_seconds: 3
 }
